@@ -187,7 +187,7 @@ class MeleeEnv:
 """Gym Style Environment"""
 class MyMeleeEnv(gym.Env):
     def __init__(self, config={}):
-        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replay=False)
+        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays=False)
         # with FileLock("thisislock.lock"): self.env.start()
         self.run = False
         self.agent_id = config["agent_id"]
