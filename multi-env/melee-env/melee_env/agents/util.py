@@ -8,6 +8,7 @@ class ObservationSpace:
         self.previous_observation = np.empty(0)
         self.previous_gamestate = None
         self.current_gamestate = None
+        # should we save previous gamestates? stack obs? vs lstm?
         self.curr_action = None
         self.player_count = None
         self.current_frame = 0
@@ -28,9 +29,13 @@ class ObservationSpace:
                 self.previous_gamestate.players[1].shield_strength
                 - self.current_gamestate.players[1].shield_strength
             ) / (self.current_gamestate.players[1].shield_strength + 1)
-            p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
-                self.current_gamestate.players[1].stock
-            )
+            
+            # animation enum <= 10 denote dead
+            p1_stock_loss = 0.0
+            if (self.current_gamestate.players[1].action.value <= 10 and 
+                self.previous_gamestate.players[1].action.value > 10):
+                p1_stock_loss = 1.0
+            
             p2_dmg = (
                 self.current_gamestate.players[2].percent
                 - self.previous_gamestate.players[2].percent
@@ -39,10 +44,11 @@ class ObservationSpace:
                 self.previous_gamestate.players[2].shield_strength
                 - self.current_gamestate.players[2].shield_strength
             ) / (self.current_gamestate.players[2].shield_strength + 1)
-            p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
-                self.current_gamestate.players[2].stock
-            )
-
+            p2_stock_loss = 0.0
+            if (self.current_gamestate.players[2].action.value <= 10 and 
+                self.previous_gamestate.players[2].action.value > 10):
+                p2_stock_loss = 1.0
+            # low percent is more good => efficient kill
             p1_stock_loss *= abs(200 - self.current_gamestate.players[1].percent) / 200
             p2_stock_loss *= abs(200 - self.current_gamestate.players[2].percent) / 200
 
@@ -57,7 +63,7 @@ class ObservationSpace:
             p1_shield_dmg = max(p1_shield_dmg, 0)
             p2_shield_dmg = max(p2_shield_dmg, 0)
 
-            w_dmg, w_shield, w_stock = 0.1, 0.3, 8
+            w_dmg, w_shield, w_stock = 0.2, 0.3, 6
             p1_loss = (
                 w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
             )
@@ -79,87 +85,97 @@ class ObservationSpace:
         # state for player 1
         p1 = gamestate.players[1]
         p2 = gamestate.players[2]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
+                
+        state1 = np.zeros((808,), dtype=np.float32)
         
-        state1 = np.zeros((37,), dtype=np.float32)
-        state1[0] = p1.position.x
-        state1[1] = p1.position.y
-        state1[2] = p2.position.x
-        state1[3] = p2.position.y
-        state1[4] = p1.position.x - p2.position.x
-        state1[5] = p1.position.y - p2.position.y
-        state1[6] = 1.0 if p1.facing else -1.0
-        state1[7] = 1.0 if p2.facing else -1.0
-        state1[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 else -1.0
-        state1[9] = log(abs(p1.position.x - p2.position.x) + 1)
-        state1[10] = log(abs(p1.position.y - p2.position.y) + 1)
-        state1[11] = p1.hitstun_frames_left
-        state1[12] = p2.hitstun_frames_left
-        state1[13] = p1.invulnerability_left
-        state1[14] = p2.invulnerability_left
-        state1[15] = p1.jumps_left
-        state1[16] = p2.jumps_left
-        state1[17] = p1.off_stage * 1.0
-        state1[18] = p2.off_stage * 1.0
-        state1[19] = p1.on_ground * 1.0
-        state1[20] = p2.on_ground * 1.0
-        state1[21] = p1.percent
-        state1[22] = p2.percent
-        state1[23] = p1.shield_strength
-        state1[24] = p2.shield_strength
-        state1[25] = p1.speed_air_x_self
-        state1[26] = p2.speed_air_x_self
-        state1[27] = p1.speed_ground_x_self
-        state1[28] = p2.speed_ground_x_self
-        state1[29] = p1.speed_x_attack
-        state1[30] = p2.speed_x_attack
-        state1[31] = p1.speed_y_attack
-        state1[32] = p2.speed_y_attack
-        state1[33] = p1.speed_y_self
-        state1[34] = p2.speed_y_self
-        state1[35] = p1.action_frame
-        state1[36] = p2.action_frame
+        state1[0] = p1.position.x / edge_pos
+        state1[1] = p1.position.y / edge_pos
+        state1[2] = p2.position.x / edge_pos
+        state1[3] = p2.position.y / edge_pos
+        state1[4] = gamestate.distance / 20
+        state1[5] = (edge_pos - abs(p1.position.x)) / edge_pos
+        state1[6] = (edge_pos - abs(p2.position.x)) / edge_pos
+        state1[7] = 1.0 if p1.facing else -1.0
+        state1[8] = 1.0 if p2.facing else -1.0
+        state1[9] = 1.0 if (p1.position.x - p2.position.x) * state1[7] < 0 else -1.0
+        state1[10] = p1.hitstun_frames_left / 10
+        state1[11] = p2.hitstun_frames_left / 10
+        state1[12] = p1.invulnerability_left / 20
+        state1[13] = p2.invulnerability_left / 20
+        state1[14] = p1.jumps_left - 1
+        state1[15] = p2.jumps_left - 1
+        state1[16] = p1.off_stage * 1.0
+        state1[17] = p2.off_stage * 1.0
+        state1[18] = p1.on_ground * 1.0
+        state1[19] = p2.on_ground * 1.0
+        state1[20] = (p1.percent - 50) / 50
+        state1[21] = (p2.percent - 50) / 50
+        state1[22] = (p1.shield_strength - 30) / 30
+        state1[23] = (p2.shield_strength - 30) / 30
+        state1[24] = p1.speed_air_x_self / 2
+        state1[25] = p2.speed_air_x_self / 2
+        state1[26] = p1.speed_ground_x_self / 2
+        state1[27] = p2.speed_ground_x_self / 2
+        state1[28] = p1.speed_x_attack
+        state1[29] = p2.speed_x_attack
+        state1[30] = p1.speed_y_attack
+        state1[31] = p2.speed_y_attack
+        state1[32] = p1.speed_y_self
+        state1[33] = p2.speed_y_self
+        state1[34] = (p1.action_frame - 15) / 15
+        state1[35] = (p2.action_frame - 15) / 15
+                                
+        if p1.action.value < 386:
+            state1[36 + p1.action.value] = 1.0
+        if p2.action.value < 386:
+            state1[36 + 386 + p2.action.value] = 1.0
+        # need to consider projectile, ecb, 
         
         # state for player 2
-        p2 = gamestate.players[1]
-        p1 = gamestate.players[2]
-        state2 = np.zeros((37,), dtype=np.float32)
-        state2[0] = p1.position.x
-        state2[1] = p1.position.y
-        state2[2] = p2.position.x
-        state2[3] = p2.position.y
-        state2[4] = p1.position.x - p2.position.x
-        state2[5] = p1.position.y - p2.position.y
-        state2[6] = 1.0 if p1.facing else -1.0
-        state2[7] = 1.0 if p2.facing else -1.0
-        state2[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 else -1.0
-        state2[9] = log(abs(p1.position.x - p2.position.x) + 1)
-        state2[10] = log(abs(p1.position.y - p2.position.y) + 1)
-        state2[11] = p1.hitstun_frames_left
-        state2[12] = p2.hitstun_frames_left
-        state2[13] = p1.invulnerability_left
-        state2[14] = p2.invulnerability_left
-        state2[15] = p1.jumps_left
-        state2[16] = p2.jumps_left
-        state2[17] = p1.off_stage * 1.0
-        state2[18] = p2.off_stage * 1.0
-        state2[19] = p1.on_ground * 1.0
-        state2[20] = p2.on_ground * 1.0
-        state2[21] = p1.percent
-        state2[22] = p2.percent
-        state2[23] = p1.shield_strength
-        state2[24] = p2.shield_strength
-        state2[25] = p1.speed_air_x_self
-        state2[26] = p2.speed_air_x_self
-        state2[27] = p1.speed_ground_x_self
-        state2[28] = p2.speed_ground_x_self
-        state2[29] = p1.speed_x_attack
-        state2[30] = p2.speed_x_attack
-        state2[31] = p1.speed_y_attack
-        state2[32] = p2.speed_y_attack
-        state2[33] = p1.speed_y_self
-        state2[34] = p2.speed_y_self
-        state2[35] = p1.action_frame
-        state2[36] = p2.action_frame
+        state2 = np.zeros((808,), dtype=np.float32)  # 크기는 810으로 설정
+
+        state2[0] = p1.position.x / edge_pos
+        state2[1] = p1.position.y / edge_pos
+        state2[2] = p2.position.x / edge_pos
+        state2[3] = p2.position.y / edge_pos
+        state2[4] = gamestate.distance / 20
+        state2[5] = (edge_pos - abs(p1.position.x)) / edge_pos
+        state2[6] = (edge_pos - abs(p2.position.x)) / edge_pos
+        state2[7] = 1.0 if p1.facing else -1.0
+        state2[8] = 1.0 if p2.facing else -1.0
+        state2[9] = 1.0 if (p1.position.x - p2.position.x) * state2[7] < 0 else -1.0
+        state2[10] = p1.hitstun_frames_left / 10
+        state2[11] = p2.hitstun_frames_left / 10
+        state2[12] = p1.invulnerability_left / 20
+        state2[13] = p2.invulnerability_left / 20
+        state2[14] = p1.jumps_left - 1
+        state2[15] = p2.jumps_left - 1
+        state2[16] = p1.off_stage * 1.0
+        state2[17] = p2.off_stage * 1.0
+        state2[18] = p1.on_ground * 1.0
+        state2[19] = p2.on_ground * 1.0
+        state2[20] = (p1.percent - 50) / 50
+        state2[21] = (p2.percent - 50) / 50
+        state2[22] = (p1.shield_strength - 30) / 30
+        state2[23] = (p2.shield_strength - 30) / 30
+        state2[24] = p1.speed_air_x_self / 2
+        state2[25] = p2.speed_air_x_self / 2
+        state2[26] = p1.speed_ground_x_self / 2
+        state2[27] = p2.speed_ground_x_self / 2
+        state2[28] = p1.speed_x_attack
+        state2[29] = p2.speed_x_attack
+        state2[30] = p1.speed_y_attack
+        state2[31] = p2.speed_y_attack
+        state2[32] = p1.speed_y_self
+        state2[33] = p2.speed_y_self
+        state2[34] = (p1.action_frame - 15) / 15
+        state2[35] = (p2.action_frame - 15) / 15
+                        
+        if p1.action.value < 386:
+            state2[36 + p1.action.value] = 1.0
+        if p2.action.value < 386:
+            state2[36 + 386 + p2.action.value] = 1.0
         
         return (state1, state2), reward, done, info
 

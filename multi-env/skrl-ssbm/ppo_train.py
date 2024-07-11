@@ -1,5 +1,6 @@
 import gymnasium as gym
 from gymnasium.envs.registration import register
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -24,16 +25,23 @@ from melee_env.agents.basic import *
 class PPOAgent(PPO):
     def __init__(self,*args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.action = torch.tensor([[0]], device=self.device)
+        self.action_cnt = 100
         
     def act(self, states: torch.Tensor, timestep: int, timesteps: int) -> torch.Tensor:
         if timestep < self._random_timesteps:
+            print(self.policy.random_act({"states": self._state_preprocessor(states)}, role="policy"))
             return self.policy.random_act({"states": self._state_preprocessor(states)}, role="policy")
-
-        # sample stochastic actions
-        actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states)}, role="policy")
-        self._current_log_prob = log_prob
-        # print(actions)
-        return actions, log_prob, outputs
+        # apply same action for 3 frames (Daboy style)
+        if self.action_cnt >= 3:   
+            # sample stochastic actions
+            actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states)}, role="policy")
+            self._current_log_prob = log_prob
+            self.action = actions
+            self.action_cnt = 1
+        else:
+            self.action_cnt += 1
+        return self.action, self._current_log_prob
         
     
 class Policy(CategoricalMixin, Model):
@@ -41,9 +49,17 @@ class Policy(CategoricalMixin, Model):
         Model.__init__(self, observation_space, action_space, device)
         CategoricalMixin.__init__(self, unnormalized_log_prob)
 
-        self.linear_layer_1 = nn.Linear(self.num_observations, 64)
-        self.linear_layer_2 = nn.Linear(64, 64)
-        self.output_layer = nn.Linear(64, self.num_actions)
+        self.linear_layer_1 = nn.Linear(self.num_observations, 256)
+        self.linear_layer_2 = nn.Linear(256, 256)
+        self.output_layer = nn.Linear(256, self.num_actions)
+        
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def compute(self, inputs, role):
         x = F.relu(self.linear_layer_1(inputs["states"]))
@@ -55,18 +71,28 @@ class Value(DeterministicMixin, Model):
         Model.__init__(self, observation_space, action_space, device)
         DeterministicMixin.__init__(self, clip_actions)
 
-        self.net = nn.Sequential(nn.Linear(self.num_observations, 64),
-                                 nn.ReLU(),
-                                 nn.Linear(64, 64),
-                                 nn.ReLU(),
-                                 nn.Linear(64, 1))
+        self.net = nn.Sequential(
+            nn.Linear(self.num_observations, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1)
+        )
+        
+        self.net.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def compute(self, inputs, role):
         return self.net(inputs["states"]), {}
 
 
 iso_path = "/home/tgkang/ssbm.iso"
-players = [MyAgent(enums.Character.CPTFALCON), CPU(enums.Character.FOX, 9)]
+players = [MyAgent(enums.Character.YOSHI), CPU(enums.Character.FOX, 5)]
 
 # register the environment
 register(
@@ -76,27 +102,27 @@ register(
         "iso_path": iso_path,
         "players": players,
         "agent_id": 1, # for 1p,
-        "n_states": 37,
+        "n_states": 808,
         "n_actions": 45, # need to apply my actionspace
     }},
 )
 env = gym.make("MyMeleeEnv")
-#env = gym.vector.make("LunarLander-v2", num_envs=1)
+#env = gym.vector.make("MyMeleeEnv", num_envs=4) # async
 env = wrap_env(env, wrapper='gymnasium')
 device = env.device
 
 
 # Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
-memory = RandomMemory(memory_size=1024, num_envs=env.num_envs, device=device)
+memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
 models_ppo["policy"] = Policy(env.observation_space, env.action_space, device)
 models_ppo["value"] = Value(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-cfg_ppo["rollouts"] = 1024  # memory_size
+cfg_ppo["rollouts"] = 8192  # memory_size
 cfg_ppo["learning_epochs"] = 10
-cfg_ppo["mini_batches"] = 32
+cfg_ppo["mini_batches"] = 8
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.95
 cfg_ppo["learning_rate"] = 1e-3
@@ -116,7 +142,7 @@ cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints each 500 and 5000 timesteps respectively
 cfg_ppo["experiment"]["write_interval"] = 1000
 cfg_ppo["experiment"]["checkpoint_interval"] = 5000
-cfg_ppo["experiment"]["directory"] = "SSBM-test"
+cfg_ppo["experiment"]["directory"] = "PPO_lv5_Yoshi"
 
 agent_ppo = PPOAgent(models=models_ppo,
                 memory=memory,
@@ -127,8 +153,6 @@ agent_ppo = PPOAgent(models=models_ppo,
 
 
 # Configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 100000, "headless": True}
+cfg_trainer = {"timesteps": 10000000, "headless": True}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
-#trainer =  ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
-# start training
 trainer.train()
