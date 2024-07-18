@@ -44,7 +44,7 @@ args = parser.parse_args()
 iso_path = args.iso
 
 def make_env(id, cpu_lvl):
-    players = [MyAgent(enums.Character.YOSHI), CPU(enums.Character.FOX, cpu_lvl)]
+    players = [MyAgent(enums.Character.DOC), CPU(enums.Character.MARIO, cpu_lvl)]
     register(
         id=id,
         entry_point=f'melee_env.myenv:{id}',
@@ -53,7 +53,7 @@ def make_env(id, cpu_lvl):
             "players": players,
             "agent_id": 1, # for 1p,
             "n_states": 808,
-            "n_actions": 25,
+            "n_actions": 27,
             "save_replay": False
         }},
     )
@@ -104,7 +104,7 @@ cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints 
 cfg_ppo["experiment"]["write_interval"] = 8192
-cfg_ppo["experiment"]["checkpoint_interval"] = 409600
+cfg_ppo["experiment"]["checkpoint_interval"] = 100000
 cfg_ppo["experiment"]["directory"] = args.exp_name
 
 agent_ppo = PPOGRUAgent(models=models_ppo,

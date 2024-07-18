@@ -325,7 +325,6 @@ class MyActionSpace:
                 [0, 1, 2],  # 8
                 [-mid, mid, 2],  # 9
                 [mid, mid, 2],  # 10
-                # I didn't consider left, right B (Yoshi roll)
                 [0, 0, 3],  # 11
                 [-1, 0, 3],  # 12
                 [1, 0, 3],  # 13
@@ -340,6 +339,9 @@ class MyActionSpace:
                 [-1, 0, 6],  # 22
                 [0, 1, 6],  # 23
                 [0, -1, 6],  # 24
+                # mario fire
+                [-1, 0, 2], # 25
+                [0, 1, 2] # 26
             ],
             dtype=np.float32,
         )
