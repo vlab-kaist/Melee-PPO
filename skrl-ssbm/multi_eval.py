@@ -80,7 +80,7 @@ op_ppo = PPOAgent(models=models_ppo,
                 agent_id = 2)
 
 #model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-13_03-31-26-444904_PPOAgent/checkpoints/agent_15564800.pt"
-agent_model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-16_16-11-23-221821_PPOAgent/checkpoints/agent_1228800.pt"
+agent_model_path = "/home/tgkang/multi-env/skrl-ssbm/SelfPlayTest/24-07-17_06-12-55-698471_PPOAgent/checkpoints/agent_18432000.pt"
 agent_ppo.load(agent_model_path)
 agent_ppo.set_running_mode("eval")
 

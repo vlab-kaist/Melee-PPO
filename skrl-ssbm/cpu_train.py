@@ -11,7 +11,7 @@ from torch.distributions.categorical import Categorical
 # Import the skrl components to build the RL system
 from skrl.models.torch import Model, CategoricalMixin, DeterministicMixin
 from skrl.memories.torch import RandomMemory
-from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
+from skrl.agents.torch.ppo import PPO, PPO_RNN, PPO_DEFAULT_CONFIG
 from skrl.trainers.torch import SequentialTrainer, ParallelTrainer
 from skrl.resources.preprocessors.torch import RunningStandardScaler
 from skrl.resources.schedulers.torch import KLAdaptiveRL
@@ -25,8 +25,8 @@ from melee_env.agents.util import (
     ObservationSpace,
     MyActionSpace
 )
-from ppo_agent import PPOAgent
-from model import Policy, Value
+from ppo_agent import PPOAgent, PPOGRUAgent
+from model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -71,15 +71,16 @@ env = gym.vector.AsyncVectorEnv([
     lambda: make_env(id, 8),
     lambda: make_env(id, 9)
 ])
-env = wrap_env(env, wrapper='gymnasium')
+env = wrap_env(env, wrapper="gymnasium")
 device = env.device
-
 # Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
 memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
-models_ppo["policy"] = Policy(env.observation_space, env.action_space, device)
-models_ppo["value"] = Value(env.observation_space, env.action_space, device)
+models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs,
+                                 hidden_size=512, sequence_length=64)
+models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=env.num_envs,
+                               hidden_size=512, sequence_length=64)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["rollouts"] = 8192  # memory_size
@@ -106,15 +107,17 @@ cfg_ppo["experiment"]["write_interval"] = 8192
 cfg_ppo["experiment"]["checkpoint_interval"] = 409600
 cfg_ppo["experiment"]["directory"] = args.exp_name
 
-agent_ppo = PPOAgent(models=models_ppo,
+agent_ppo = PPOGRUAgent(models=models_ppo,
                 memory=memory,
                 cfg=cfg_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device, 
                 agent_id = 1)
+
 if args.model_path is not None:
     agent_ppo.load(args.model_path)
+    
 cfg_trainer = {"timesteps": 20000000, "headless": True}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
 trainer.train()
