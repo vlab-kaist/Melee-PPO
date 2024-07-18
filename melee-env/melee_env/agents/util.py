@@ -341,7 +341,7 @@ class MyActionSpace:
                 [0, -1, 6],  # 24
                 # mario fire
                 [-1, 0, 2], # 25
-                [0, 1, 2] # 26
+                [1, 0, 2] # 26
             ],
             dtype=np.float32,
         )
