@@ -127,7 +127,7 @@ if args.model_path is not None:
     agent_ppo.load(args.model_path)
 
 agent_ppo.experiment_dir = args.save_dir
-cfg_trainer = {"timesteps": args.timesteps, "headless": True, "close_environment_at_exit": False}
+cfg_trainer = {"timesteps": args.timesteps, "headless": True}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
 trainer.initial_timestep = args.init_timestep
 trainer.timesteps += args.init_timestep
