@@ -3,10 +3,12 @@ DONE:
 - gamestate 직접 입력 받아 preprocess 적용
 - op agent 학습없이 동작만 하는 env 구축 (SelfPlayMeleeEnv)
 - GRU Actor, Critic 모델 적용 => 학습 잘 안됨. 호수님이 개선해줌
+- frame stack env 구축, StackPPOAgent 구현 (gamestate 받아서 stack)
 
 WIP:
 - stacked observation mlp 구현
 
 TODO:
+- 안끊기게 safe learning 환경 구축
 - Platform 고려 state 수정
 - league based self play 구현
