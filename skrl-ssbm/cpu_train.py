@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
+from torch.utils.tensorboard import SummaryWriter
 
 # Import the skrl components to build the RL system
 from skrl.models.torch import Model, CategoricalMixin, DeterministicMixin
@@ -26,17 +27,26 @@ from melee_env.agents.util import (
     MyActionSpace
 )
 from ppo_agent import PPOAgent, PPOGRUAgent
-from model import Policy, Value, GRUPolicy
+from model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 parser.add_argument(
-    "--exp_name", default="PPO", type=str, help="Experiment Name"
+    "--save_dir", default=None, type=str, help="Where to save checkpoint and log"
+)
+parser.add_argument(
+    "--init_timestep", default=0, type=int, help="Timestep to start logging and save"
+)
+parser.add_argument(
+    "--timesteps", default=100000, type=int, help="Total timesteps to train"
 )
 parser.add_argument(
     "--model_path", default=None, type=str, help="Path to the saved model to be loaded for further training"
+)
+parser.add_argument(
+    "--save_freq", default=100000, type=int, help="Model save Frequency"
 )
 
 args = parser.parse_args()
@@ -78,7 +88,7 @@ memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
 models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs)
-models_ppo["value"] = Value(env.observation_space, env.action_space, device)
+models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=env.num_envs) #Value(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["rollouts"] = 8192  # memory_size
@@ -86,7 +96,7 @@ cfg_ppo["learning_epochs"] = 10
 cfg_ppo["mini_batches"] = 8
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.95
-cfg_ppo["learning_rate"] = 1e-4  # Lower the learning rate
+cfg_ppo["learning_rate"] = 1e-5  # Lower the learning rate
 # cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
 # cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
 cfg_ppo["grad_norm_clip"] = 1.0
@@ -102,8 +112,8 @@ cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints 
 cfg_ppo["experiment"]["write_interval"] = 8192
-cfg_ppo["experiment"]["checkpoint_interval"] = 100000
-cfg_ppo["experiment"]["directory"] = args.exp_name
+cfg_ppo["experiment"]["checkpoint_interval"] = args.save_freq
+#cfg_ppo["experiment"]["directory"] = args.exp_name
 
 agent_ppo = PPOGRUAgent(models=models_ppo,
                 memory=memory,
@@ -114,10 +124,13 @@ agent_ppo = PPOGRUAgent(models=models_ppo,
                 agent_id = 1)
 
 if args.model_path is not None:
-    pass
-    #agent_ppo.load(args.model_path)
-    #agent_ppo.load("/home/tgkang/multi-env/skrl-ssbm/GRU_PPO/24-07-18_21-13-33-337300_PPOGRUAgent/checkpoints/agent_200000.pt")
-    #agent_ppo.load("/home/tgkang/multi-env/skrl-ssbm/GRU_PPO/24-07-19_05-27-27-007612_PPOGRUAgent/checkpoints/agent_3200000.pt")
-cfg_trainer = {"timesteps": 20000000, "headless": True}
+    agent_ppo.load(args.model_path)
+
+agent_ppo.experiment_dir = args.save_dir
+cfg_trainer = {"timesteps": args.timesteps, "headless": True, "close_environment_at_exit": False}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
+trainer.initial_timestep = args.init_timestep
+trainer.timesteps += args.init_timestep
+
+
 trainer.train() 
