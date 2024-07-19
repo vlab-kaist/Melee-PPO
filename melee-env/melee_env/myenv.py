@@ -226,6 +226,44 @@ class CPUMeleeEnv(gym.Env):
         if self.run:
             with FileLock("thisislock.lock"): self.env.close()
 
+class StackedCPUMeleeEnv(gym.Env):
+    def __init__(self, config={}):
+        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays= config["save_replay"])
+        # with FileLock("thisislock.lock"): self.env.start()
+        self.run = False
+        self.agent_id = config["agent_id"]
+        self.action_space = gym.spaces.Discrete(config["n_actions"])
+        low = np.array([-10000]*config["n_states"]*config["n_stack"], dtype=np.float32).reshape(-1)
+        high = np.array([10000]*config["n_states"]*config["n_stack"], dtype=np.float32).reshape(-1)
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        
+        self.stack_size = config["n_stack"]
+        self.stacked_obs = None
+
+    def reset(self, *, seed=None, options=None):
+        if self.run:
+            with FileLock("thisislock.lock"): self.env.close()
+        with FileLock("thisislock.lock"):
+            self.env.start()
+        self.run = True
+        obs, gamestate = self.env.setup(enums.Stage.FINAL_DESTINATION)
+        self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
+        return self.stacked_obs, {}
+    
+    def step(self, action):
+        truncated = False
+        obs, reward, done, gamestate = self.env.step(action)
+        if self.stacked_obs is None:
+            self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
+        else:
+            self.stacked_obs = np.roll(self.stacked_obs, -1, axis=0)
+            self.stacked_obs[-1] = obs[self.agent_id - 1]
+        return self.stacked_obs.flatten(), reward[self.agent_id - 1], bool(done), truncated, {}
+    
+    def close(self):
+        if self.run:
+            with FileLock("thisislock.lock"): self.env.close()
+
 # this is only for evaluation of two agents
 class MultiMeleeEnv(gym.Env):
     def __init__(self, config={}):

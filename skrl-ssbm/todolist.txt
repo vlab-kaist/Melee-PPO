@@ -2,12 +2,11 @@ DONE:
 - skrl Agent customize 진행: Agent act() 수정
 - gamestate 직접 입력 받아 preprocess 적용
 - op agent 학습없이 동작만 하는 env 구축 (SelfPlayMeleeEnv)
-- GRU Actor, Critic 모델 적용
+- GRU Actor, Critic 모델 적용 => 학습 잘 안됨. 호수님이 개선해줌
 
 WIP:
-- GRU DOC 모델 학습 (DOC vs Mario)
-- league based self play 구현
+- stacked observation mlp 구현
 
 TODO:
 - Platform 고려 state 수정
-- GRU 
+- league based self play 구현
