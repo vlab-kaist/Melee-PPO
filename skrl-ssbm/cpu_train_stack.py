@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
+from torch.utils.tensorboard import SummaryWriter
 
 # Import the skrl components to build the RL system
 from skrl.models.torch import Model, CategoricalMixin, DeterministicMixin
@@ -26,25 +27,32 @@ from melee_env.agents.util import (
     MyActionSpace
 )
 from ppo_agent import PPOAgent, PPOGRUAgent, StackedPPOAgent
-from model import Policy, Value, GRUPolicy
+from model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 parser.add_argument(
-    "--exp_name", default="STACK_PPO", type=str, help="Experiment Name"
+    "--save_dir", default=None, type=str, help="Where to save checkpoint and log"
+)
+parser.add_argument(
+    "--init_timestep", default=0, type=int, help="Timestep to start logging and save"
+)
+parser.add_argument(
+    "--timesteps", default=100000, type=int, help="Total timesteps to train"
 )
 parser.add_argument(
     "--model_path", default=None, type=str, help="Path to the saved model to be loaded for further training"
 )
 parser.add_argument(
-    "--n_stack", default=16, type=int, help="Number of observations to stack"
+    "--save_freq", default=100000, type=int, help="Model save Frequency"
 )
 
 args = parser.parse_args()
+
 iso_path = args.iso
-stack_size = args.n_stack
+n_stack = 16
 
 def make_env(id, cpu_lvl):
     players = [MyAgent(enums.Character.DOC), CPU(enums.Character.MARIO, cpu_lvl)]
@@ -58,7 +66,7 @@ def make_env(id, cpu_lvl):
             "n_states": 808,
             "n_actions": 27,
             "save_replay": False,
-            "n_stack": stack_size
+            "n_stack": n_stack
         }},
     )
     return gym.make(id)
@@ -82,7 +90,7 @@ memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
 models_ppo["policy"] = Policy(env.observation_space, env.action_space, device)
-models_ppo["value"] = Value(env.observation_space, env.action_space, device)
+models_ppo["value"] = Value(env.observation_space, env.action_space, device) #Value(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["rollouts"] = 8192  # memory_size
@@ -101,25 +109,30 @@ cfg_ppo["entropy_loss_scale"] = 0.02  # Increase entropy loss scale for more exp
 cfg_ppo["value_loss_scale"] = 0.5
 cfg_ppo["kl_threshold"] = 0
 cfg_ppo["state_preprocessor"] = RunningStandardScaler
-cfg_ppo["state_preprocessor_kwargs"] = {"size":env.observation_space, "device": device}
+cfg_ppo["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
 cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints 
 cfg_ppo["experiment"]["write_interval"] = 8192
-cfg_ppo["experiment"]["checkpoint_interval"] = 10000
-cfg_ppo["experiment"]["directory"] = args.exp_name
+cfg_ppo["experiment"]["checkpoint_interval"] = args.save_freq
+#cfg_ppo["experiment"]["directory"] = args.exp_name
 
 agent_ppo = StackedPPOAgent(models=models_ppo,
                 memory=memory,
                 cfg=cfg_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
-                stack_size = stack_size,
+                stack_size = n_stack,
                 device=device, 
                 agent_id = 1)
 
 if args.model_path is not None:
     agent_ppo.load(args.model_path)
-cfg_trainer = {"timesteps": 20000000, "headless": True}
+
+agent_ppo.experiment_dir = args.save_dir
+cfg_trainer = {"timesteps": args.timesteps, "headless": True}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
+trainer.initial_timestep = args.init_timestep
+trainer.timesteps += args.init_timestep
+
 trainer.train() 
