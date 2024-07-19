@@ -26,7 +26,7 @@ from melee_env.agents.util import (
     MyActionSpace
 )
 from ppo_agent import PPOAgent, PPOGRUAgent
-from model import Policy, Value, GRUPolicy, GRUValue
+from model import Policy, Value, GRUPolicy
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -61,14 +61,14 @@ def make_env(id, cpu_lvl):
 
 id = "CPUMeleeEnv"
 env = gym.vector.AsyncVectorEnv([
-    lambda: make_env(id, 1),
-    lambda: make_env(id, 2),
+    #lambda: make_env(id, 1),
+    #lambda: make_env(id, 2),
     lambda: make_env(id, 3),
-    lambda: make_env(id, 4),
+    #lambda: make_env(id, 4),
     lambda: make_env(id, 5),
-    lambda: make_env(id, 6),
+    #lambda: make_env(id, 6),
     lambda: make_env(id, 7),
-    lambda: make_env(id, 8),
+    #lambda: make_env(id, 8),
     lambda: make_env(id, 9)
 ])
 env = wrap_env(env, wrapper="gymnasium")
@@ -77,10 +77,8 @@ device = env.device
 memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
-models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs,
-                                 hidden_size=512, sequence_length=64)
-models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=env.num_envs,
-                               hidden_size=512, sequence_length=64)
+models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs)
+models_ppo["value"] = Value(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["rollouts"] = 8192  # memory_size
@@ -88,10 +86,10 @@ cfg_ppo["learning_epochs"] = 10
 cfg_ppo["mini_batches"] = 8
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.95
-cfg_ppo["learning_rate"] = 5e-4  # Lower the learning rate
-cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
-cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
-cfg_ppo["grad_norm_clip"] = 0.5
+cfg_ppo["learning_rate"] = 1e-4  # Lower the learning rate
+# cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
+# cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
+cfg_ppo["grad_norm_clip"] = 1.0
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False
@@ -116,8 +114,10 @@ agent_ppo = PPOGRUAgent(models=models_ppo,
                 agent_id = 1)
 
 if args.model_path is not None:
-    agent_ppo.load(args.model_path)
-    
+    pass
+    #agent_ppo.load(args.model_path)
+    #agent_ppo.load("/home/tgkang/multi-env/skrl-ssbm/GRU_PPO/24-07-18_21-13-33-337300_PPOGRUAgent/checkpoints/agent_200000.pt")
+    #agent_ppo.load("/home/tgkang/multi-env/skrl-ssbm/GRU_PPO/24-07-19_05-27-27-007612_PPOGRUAgent/checkpoints/agent_3200000.pt")
 cfg_trainer = {"timesteps": 20000000, "headless": True}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
-trainer.train()
+trainer.train() 
