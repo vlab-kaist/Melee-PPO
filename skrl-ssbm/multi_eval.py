@@ -25,8 +25,8 @@ from melee_env.agents.util import (
     ObservationSpace,
     MyActionSpace
 )
-from ppo_agent import PPOAgent
-from model import Policy, Value
+from ppo_agent import PPOAgent,StackedPPOAgent, PPOGRUAgent
+from model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 
 def make_env(id):
-    players = [MyAgent(enums.Character.YOSHI), MyAgent(enums.Character.YOSHI)]
+    players = [MyAgent(enums.Character.DOC), MyAgent(enums.Character.DOC)]
     register(
         id=id,
         entry_point=f'melee_env.myenv:{id}',
@@ -46,7 +46,7 @@ def make_env(id):
             "players": players,
             "agent_id": 1, # for 1p,
             "n_states": 808,
-            "n_actions": 25,
+            "n_actions": 27,
             "save_replay": True
         }},
     )
@@ -56,8 +56,8 @@ env = make_env(id="MultiMeleeEnv")
 device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 
 models_ppo = {}
-models_ppo["policy"] = Policy(env.observation_space, env.action_space, device)
-models_ppo["value"] = Value(env.observation_space, env.action_space, device)
+models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device)
+models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["state_preprocessor"] = RunningStandardScaler
@@ -65,14 +65,14 @@ cfg_ppo["state_preprocessor_kwargs"] = {"size": env.observation_space, "device":
 cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 
-agent_ppo = PPOAgent(models=models_ppo,
+agent_ppo = PPOGRUAgent(models=models_ppo,
                 cfg=cfg_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device, 
                 agent_id = 1)
 
-op_ppo = PPOAgent(models=models_ppo,
+op_ppo = PPOGRUAgent(models=models_ppo,
                 cfg=cfg_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
@@ -80,13 +80,15 @@ op_ppo = PPOAgent(models=models_ppo,
                 agent_id = 2)
 
 #model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-13_03-31-26-444904_PPOAgent/checkpoints/agent_15564800.pt"
-agent_model_path = "/home/tgkang/multi-env/skrl-ssbm/SelfPlayTest/24-07-17_06-12-55-698471_PPOAgent/checkpoints/agent_18432000.pt"
+agent_model_path = "/home/tgkang/multi-env/skrl-ssbm/TransformerGRU/checkpoints/recent_model.pt"
 agent_ppo.load(agent_model_path)
 agent_ppo.set_running_mode("eval")
+agent_ppo.init()
 
-op_model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-16_16-11-23-221821_PPOAgent/checkpoints/agent_1228800.pt"
+op_model_path = "/home/tgkang/multi-env/skrl-ssbm/TransformerGRU/checkpoints/recent_model.pt"
 op_ppo.load(op_model_path)
 op_ppo.set_running_mode("eval")
+op_ppo.init()
 
 state, info = env.reset()
 done = False
