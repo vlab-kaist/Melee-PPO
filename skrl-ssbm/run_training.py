@@ -4,13 +4,14 @@ import time
 import psutil
 import subprocess
 import shutil
+import signal
 from tqdm import tqdm
 
 script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
 save_dir = "./TransformerGRU"
 init_timestep = 0
-timesteps = 24600
+timesteps = 18000
 save_freq = timesteps
 model_path = None
 
@@ -23,17 +24,35 @@ def run_command(cmd):
     try:
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
-            print(f"error occur: {stderr}. kill the program", file=sys.stderr)
-            proc.kill()
+            print(f"error occur: {stderr}. send SIGINT to the program", file=sys.stderr)
+            proc.send_signal(signal.SIGINT)  # Send SIGINT to the process
+            try:
+                proc.wait(timeout=5)  # Wait for the process to terminate within 5 seconds
+            except subprocess.TimeoutExpired:
+                print("Process did not terminate in time. Sending SIGKILL.")
+                proc.kill()  # If process does not terminate, kill it
+                proc.wait()
             raise subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
         print(stderr, file=sys.stderr)
         return stdout
     except subprocess.CalledProcessError as e:
-        print(f"error occur: {e.stderr}. kill the program")
-        proc.kill()
+        print(f"error occur: {e.stderr}. send SIGINT to the program")
+        proc.send_signal(signal.SIGINT)  # Send SIGINT to the process
+        try:
+            proc.wait(timeout=5)  # Wait for the process to terminate within 5 seconds
+        except subprocess.TimeoutExpired:
+            print("Process did not terminate in time. Sending SIGKILL.")
+            proc.kill()  # If process does not terminate, kill it
+            proc.wait()
     except Exception as e:
-        print(f"unexpected error occur: {str(e)}. kill the program.")
-        proc.kill()
+        print(f"unexpected error occur: {str(e)}. send SIGINT to the program.")
+        proc.send_signal(signal.SIGINT)  # Send SIGINT to the process
+        try:
+            proc.wait(timeout=5)  # Wait for the process to terminate within 5 seconds
+        except subprocess.TimeoutExpired:
+            print("Process did not terminate in time. Sending SIGKILL.")
+            proc.kill()  # If process does not terminate, kill it
+            proc.wait()
         
 # first try
 cmd = (
@@ -47,13 +66,14 @@ cmd = (
 
 run_command(cmd)
 new_model = os.path.join(save_dir,"checkpoints",f"agent_{save_freq}.pt")
+#new_model = "/home/tgkang/multi-env/skrl-ssbm/trained_model/agent_18146600.pt"
 shutil.copy2(new_model, recent_model)
 
-if os.path.exists(new_model):
-    shutil.copy2(new_model, recent_model)
-    os.remove(new_model)
+# if os.path.exists(new_model):
+#     shutil.copy2(new_model, recent_model)
+#     os.remove(new_model)
 
-for i in tqdm(range(1, 10000), ncols=50):
+for i in tqdm(range(1, 10001), ncols=50):
     init_timestep = i * timesteps + 1
 
     cmd = (
