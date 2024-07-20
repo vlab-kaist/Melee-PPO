@@ -15,15 +15,21 @@ model_path = None
 recent_model = None
 
 def run_command(cmd):
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     try:
-        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
-        return result.stdout
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            print(f"error occur: {stderr}. kill the program", file=sys.stderr)
+            proc.kill()
+            raise subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
+        print(stderr, file=sys.stderr)
+        return stdout
     except subprocess.CalledProcessError as e:
         print(f"error occur: {e.stderr}. kill the program")
-        sys.exit(1)
+        proc.kill()
     except Exception as e:
         print(f"unexpected error occur: {str(e)}. kill the program.")
-        sys.exit(1)
+        proc.kill()
         
 # first try
 cmd = (
@@ -36,7 +42,7 @@ cmd = (
     )
 run_command(cmd)
 
-for i in tqdm(range(1, 10000)):
+for i in tqdm(range(1, 10000), dynamic_ncols=True):
     init_timestep = i * timesteps + 1
     model_idx = init_timestep - 1
     model_path = os.path.join(save_dir,"checkpoints",f"agent_{model_idx}.pt")
