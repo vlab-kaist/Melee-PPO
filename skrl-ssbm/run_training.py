@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import psutil
+import subprocess
 from tqdm import tqdm
 
 script_path = "./cpu_train.py"
@@ -13,6 +14,17 @@ save_freq = 8200
 model_path = None
 recent_model = None
 
+def run_command(cmd):
+    try:
+        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"error occur: {e.stderr}. kill the program")
+        sys.exit(1)
+    except Exception as e:
+        print(f"unexpected error occur: {str(e)}. kill the program.")
+        sys.exit(1)
+        
 # first try
 cmd = (
         f"python {script_path} "
@@ -22,7 +34,7 @@ cmd = (
         f"--timesteps {timesteps} "
         f"--save_freq {save_freq} "
     )
-os.system(cmd)
+run_command(cmd)
 
 for i in tqdm(range(1, 10000)):
     init_timestep = i * timesteps + 1
@@ -42,7 +54,8 @@ for i in tqdm(range(1, 10000)):
         f"--model_path {model_path} "
     )
 
-    os.system(cmd)
+    run_command(cmd)
+    
     time.sleep(0.1)
     current_user = os.getlogin()
 
