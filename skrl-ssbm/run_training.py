@@ -3,6 +3,7 @@ import sys
 import time
 import psutil
 import subprocess
+import shutil
 from tqdm import tqdm
 
 script_path = "./cpu_train.py"
@@ -10,9 +11,12 @@ iso = "/home/tgkang/ssbm.iso"
 save_dir = "./TransformerGRU"
 init_timestep = 0
 timesteps = 24600
-save_freq = 8200
+save_freq = timesteps
 model_path = None
-recent_model = None
+
+real_freq = timesteps * 20
+
+recent_model = os.path.join(save_dir, "checkpoints", "recent_model.pt")
 
 def run_command(cmd):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -40,16 +44,18 @@ cmd = (
         f"--timesteps {timesteps} "
         f"--save_freq {save_freq} "
     )
-run_command(cmd)
 
-for i in tqdm(range(1, 10000), dynamic_ncols=True):
+run_command(cmd)
+new_model = os.path.join(save_dir,"checkpoints",f"agent_{save_freq}.pt")
+shutil.copy2(new_model, recent_model)
+
+if os.path.exists(new_model):
+    shutil.copy2(new_model, recent_model)
+    os.remove(new_model)
+
+for i in tqdm(range(1, 10000), ncols=50):
     init_timestep = i * timesteps + 1
-    model_idx = init_timestep - 1
-    model_path = os.path.join(save_dir,"checkpoints",f"agent_{model_idx}.pt")
-    
-    if not os.path.exists(model_path):
-        model_path = recent_model
-    recent_model = model_path
+
     cmd = (
         f"python {script_path} "
         f"--iso {iso} "
@@ -57,12 +63,21 @@ for i in tqdm(range(1, 10000), dynamic_ncols=True):
         f"--init_timestep {init_timestep} "
         f"--timesteps {timesteps} "
         f"--save_freq {save_freq} "
-        f"--model_path {model_path} "
+        f"--model_path {recent_model} "
     )
 
     run_command(cmd)
     
+    model_idx = (i + 1) * timesteps
+    new_model = os.path.join(save_dir,"checkpoints",f"agent_{model_idx}.pt")
+    
+    if os.path.exists(new_model):
+        shutil.copy2(new_model, recent_model)
+        if not model_idx % real_freq == 0:
+            os.remove(new_model)
+            
     time.sleep(0.1)
+    
     current_user = os.getlogin()
 
     for proc in psutil.process_iter(['pid', 'username', 'name']):
