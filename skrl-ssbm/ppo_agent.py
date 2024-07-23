@@ -1,3 +1,4 @@
+import csv
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,13 +7,19 @@ from skrl.agents.torch.ppo import PPO, PPO_RNN, PPO_DEFAULT_CONFIG
 
 import melee
 import numpy as np
-
+from enum import Enum
+    
 class PPOAgent(PPO):
-    def __init__(self, agent_id=1, *args, **kwargs):
+    def __init__(self, agent_id=1, players=None, csv_path=None,
+                 is_selfplay=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_id = agent_id
         self.action = torch.tensor([[0]], device=self.device)
         self.action_cnt = 3
+        self.players = players
+        self.gamestate = None
+        self.csv_path = csv_path
+        self.is_selfplay = is_selfplay
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -34,16 +41,74 @@ class PPOAgent(PPO):
 
     def state_preprocess(self, gamestate):
         return state_preprocess(gamestate, self.agent_id)
-
+    
+    def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
+        super().record_transition(states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps)
+        #print(terminated[0].item())
+        
+        if self.is_selfplay:
+            for i in range(states.shape[0]):
+                if terminated[i] and self.gamestate is not None:
+                    # load data from csv file
+                    with open(self.csv_path, mode='r') as file:
+                        reader = csv.DictReader(file)
+                        for row in reader:
+                            if int(row["ID"]) == self.players["p1"].id:  
+                                self.players["p1"].elo = float(row["elo"])
+                                self.players["p1"].wins = int(row["wins"])
+                                self.players["p1"].loses = int(row["loses"])
+                            if int(row["ID"]) == self.players["p2"].id:  
+                                self.players["p2"].elo = float(row["elo"])
+                                self.players["p2"].wins = int(row["wins"])
+                                self.players["p2"].loses = int(row["loses"])
+                    
+                    # calculate elo rating
+                    k1 = 1 + 18 / (1 + 2 ** ((self.players["p1"].elo - 1500) / 63))
+                    k2 = 1 + 18 / (1 + 2 ** ((self.players["p2"].elo - 1500) / 63))
+                    e1 = 1 / (1 + 10 ** ((self.players["p2"].elo - self.players["p1"].elo) / 4))
+                    e2 = 1 / (1 + 10 ** ((self.players["p1"].elo - self.players["p2"].elo) / 4))
+                    
+                    if self.gamestate.player[1].stock > self.gamestate.player[2].stock:
+                        self.players["p1"].wins += 1
+                        self.players["p2"].loses += 1
+                        self.players["p1"].elo += k1 * (1 - e1)
+                        self.players["p2"].elo += k2 * (0 - e2)
+                    elif self.gamestate.player[1].stock < self.gamestate.player[2].stock:
+                        self.players["p1"].loses += 1
+                        self.players["p2"].wins += 1
+                        self.players["p1"].elo += k1 * (0 - e1)
+                        self.players["p2"].elo += k2 * (1 - e2)
+                    else:
+                        self.players["p1"].elo += k1 * (0.5 - e1)
+                        self.players["p2"].elo += k2 * (0.5 - e2)
+                        
+                    # write chagned data to csv file
+                    p1_data = [self.players["p1"].id, self.players["p1"].wins, self.players["p1"].loses, self.players["p1"].elo]
+                    p2_data = [self.players["p2"].id, self.players["p2"].wins, self.players["p2"].loses, self.players["p2"].elo]
+                    with open(self.csv_path, 'r', newline='') as file:
+                        reader = csv.reader(file)
+                        rows = list(reader)
+                    rows[self.players["p1"].id + 1] = p1_data
+                    rows[self.players["p2"].id + 1] = p2_data
+                    with open(self.csv_path, 'w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerows(rows)
+        self.gamestate = infos["gamestate"]
+        
 
 class StackedPPOAgent(PPO): # 
-    def __init__(self, agent_id=1, stack_size=4, *args, **kwargs):
+    def __init__(self, agent_id=1, stack_size=4, players=None, csv_path=None,
+                 is_selfplay=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_id = agent_id
         self.action = torch.tensor([[0]], device=self.device)
         self.action_cnt = 3
         self.stack_size = stack_size
         self.stacked_obs = None
+        self.gamestate = None
+        self.players = players
+        self.csv_path = csv_path
+        self.is_selfplay = is_selfplay
         
     def act(self, states, timestep: int, timesteps: int):
         # when agent is not training. it use gamestate itself
@@ -71,13 +136,72 @@ class StackedPPOAgent(PPO): #
     
     def state_preprocess(self, gamestate):
         return state_preprocess(gamestate, self.agent_id)
-
+    
+    def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
+        super().record_transition(states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps)
+        
+        # when terminated, update wins, loses, elos in csv file
+        if self.is_selfplay:
+            for i in range(states.shape[0]):
+                if terminated[i] and self.gamestate is not None:
+                    # load data from csv file
+                    with open(self.csv_path, mode='r') as file:
+                        reader = csv.DictReader(file)
+                        for row in reader:
+                            if int(row["ID"]) == self.players["p1"].id:  
+                                self.players["p1"].elo = float(row["elo"])
+                                self.players["p1"].wins = int(row["wins"])
+                                self.players["p1"].loses = int(row["loses"])
+                            if int(row["ID"]) == self.players["p2"].id:  
+                                self.players["p2"].elo = float(row["elo"])
+                                self.players["p2"].wins = int(row["wins"])
+                                self.players["p2"].loses = int(row["loses"])
+                    
+                    # calculate elo rating
+                    k1 = 1 + 18 / (1 + 2 ** ((self.players["p1"].elo - 1500) / 63))
+                    k2 = 1 + 18 / (1 + 2 ** ((self.players["p2"].elo - 1500) / 63))
+                    e1 = 1 / (1 + 10 ** ((self.players["p2"].elo - self.players["p1"].elo) / 4))
+                    e2 = 1 / (1 + 10 ** ((self.players["p1"].elo - self.players["p2"].elo) / 4))
+                    
+                    if self.gamestate.player[1].stock > self.gamestate.player[2].stock:
+                        self.players["p1"].wins += 1
+                        self.players["p2"].loses += 1
+                        self.players["p1"].elo += k1 * (1 - e1)
+                        self.players["p2"].elo += k2 * (0 - e2)
+                    elif self.gamestate.player[1].stock < self.gamestate.player[2].stock:
+                        self.players["p1"].loses += 1
+                        self.players["p2"].wins += 1
+                        self.players["p1"].elo += k1 * (0 - e1)
+                        self.players["p2"].elo += k2 * (1 - e2)
+                    else:
+                        self.players["p1"].elo += k1 * (0.5 - e1)
+                        self.players["p2"].elo += k2 * (0.5 - e2)
+                        
+                    # write chagned data to csv file
+                    p1_data = [self.players["p1"].id, self.players["p1"].wins, self.players["p1"].loses, self.players["p1"].elo]
+                    p2_data = [self.players["p2"].id, self.players["p2"].wins, self.players["p2"].loses, self.players["p2"].elo]
+                    with open(self.csv_path, 'r', newline='') as file:
+                        reader = csv.reader(file)
+                        rows = list(reader)
+                    rows[self.players["p1"].id + 1] = p1_data
+                    rows[self.players["p2"].id + 1] = p2_data
+                    with open(self.csv_path, 'w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerows(rows)
+                        
+        self.gamestate = infos["gamestate"]        
+        
 class PPOGRUAgent(PPO_RNN):
-    def __init__(self, agent_id=1, *args, **kwargs):
+    def __init__(self, agent_id=1, players=None, csv_path=None,
+                 is_selfplay=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_id = agent_id
         self.action = torch.tensor([[0]], device=self.device)
         self.action_cnt = 3
+        self.players = players
+        self.gamestate
+        self.csv_path = csv_path
+        self.is_selfplay = is_selfplay
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -100,6 +224,60 @@ class PPOGRUAgent(PPO_RNN):
     
     def state_preprocess(self, gamestate):
         return state_preprocess(gamestate, self.agent_id)
+    
+    def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
+        super().record_transition(states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps)
+        #print(terminated[0].item())
+        
+        if self.is_selfplay:
+            for i in range(states.shape[0]):
+                if terminated[i] and self.gamestate is not None:
+                    # load data from csv file
+                    with open(self.csv_path, mode='r') as file:
+                        reader = csv.DictReader(file)
+                        for row in reader:
+                            if int(row["ID"]) == self.players["p1"].id:  
+                                self.players["p1"].elo = float(row["elo"])
+                                self.players["p1"].wins = int(row["wins"])
+                                self.players["p1"].loses = int(row["loses"])
+                            if int(row["ID"]) == self.players["p2"].id:  
+                                self.players["p2"].elo = float(row["elo"])
+                                self.players["p2"].wins = int(row["wins"])
+                                self.players["p2"].loses = int(row["loses"])
+                    
+                    # calculate elo rating
+                    k1 = 1 + 18 / (1 + 2 ** ((self.players["p1"].elo - 1500) / 63))
+                    k2 = 1 + 18 / (1 + 2 ** ((self.players["p2"].elo - 1500) / 63))
+                    e1 = 1 / (1 + 10 ** ((self.players["p2"].elo - self.players["p1"].elo) / 4))
+                    e2 = 1 / (1 + 10 ** ((self.players["p1"].elo - self.players["p2"].elo) / 4))
+                    
+                    if self.gamestate.player[1].stock > self.gamestate.player[2].stock:
+                        self.players["p1"].wins += 1
+                        self.players["p2"].loses += 1
+                        self.players["p1"].elo += k1 * (1 - e1)
+                        self.players["p2"].elo += k2 * (0 - e2)
+                    elif self.gamestate.player[1].stock < self.gamestate.player[2].stock:
+                        self.players["p1"].loses += 1
+                        self.players["p2"].wins += 1
+                        self.players["p1"].elo += k1 * (0 - e1)
+                        self.players["p2"].elo += k2 * (1 - e2)
+                    else:
+                        self.players["p1"].elo += k1 * (0.5 - e1)
+                        self.players["p2"].elo += k2 * (0.5 - e2)
+                        
+                    # write chagned data to csv file
+                    p1_data = [self.players["p1"].id, self.players["p1"].wins, self.players["p1"].loses, self.players["p1"].elo]
+                    p2_data = [self.players["p2"].id, self.players["p2"].wins, self.players["p2"].loses, self.players["p2"].elo]
+                    with open(self.csv_path, 'r', newline='') as file:
+                        reader = csv.reader(file)
+                        rows = list(reader)
+                    rows[self.players["p1"].id + 1] = p1_data
+                    rows[self.players["p2"].id + 1] = p2_data
+                    with open(self.csv_path, 'w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerows(rows)
+        self.gamestate = infos["gamestate"]
+    
 
 def state_preprocess(gamestate, agent_id):
     p1 = gamestate.players[1]

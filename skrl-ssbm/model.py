@@ -4,6 +4,13 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch.distributions.categorical import Categorical
 from skrl.models.torch import Model, CategoricalMixin, DeterministicMixin
+from enum import Enum
+
+class AgentType(Enum):
+    CPU = 1
+    MLP = 2
+    STACK = 3
+    GRU = 4
 
 class Policy(CategoricalMixin, Model):
     def __init__(self, observation_space, action_space, device, unnormalized_log_prob=True):

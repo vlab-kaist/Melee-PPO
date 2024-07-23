@@ -1,6 +1,7 @@
 import socket
 import sys
 import time
+import random
 from filelock import Timeout, FileLock
 import gymnasium as gym
 from gymnasium import spaces
@@ -12,6 +13,7 @@ from melee_env.agents.util import *
 from melee_env.dconfig import DolphinConfig
 import psutil
 import torch
+from enum import Enum
 
 from skrl.models.torch import Model, CategoricalMixin, DeterministicMixin
 from skrl.memories.torch import RandomMemory
@@ -21,11 +23,13 @@ from skrl.resources.preprocessors.torch import RunningStandardScaler
 from skrl.resources.schedulers.torch import KLAdaptiveRL
 from skrl.envs.torch import wrap_env
 
-from ppo_agent import PPOAgent
-from model import Policy, Value
+from ppo_agent import PPOAgent, StackedPPOAgent, PPOGRUAgent
+from model import *
 
 def find_available_udp_port(start_port: int = 1024, end_port: int = 65535) -> int:
-    for port in range(start_port, end_port + 1):
+    x = list(range(start_port, end_port + 1))
+    random.shuffle(x)
+    for port in x:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -207,6 +211,7 @@ class CPUMeleeEnv(gym.Env):
         low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        self.config = config
 
     def reset(self, *, seed=None, options=None):
         if self.run:
@@ -214,13 +219,13 @@ class CPUMeleeEnv(gym.Env):
         with FileLock("thisislock.lock"):
             self.env.start()
         self.run = True
-        obs, gamestate = self.env.setup(enums.Stage.FINAL_DESTINATION)
-        return obs[self.agent_id - 1], {}
+        obs, gamestate = self.env.setup(self.config["stage"])
+        return obs[self.agent_id - 1], {'gamestate': gamestate}
     
     def step(self, action):
         truncated = False
         obs, reward, done, gamestate = self.env.step(action)
-        return obs[self.agent_id - 1], reward[self.agent_id - 1], bool(done), truncated, {}
+        return obs[self.agent_id - 1], reward[self.agent_id - 1], bool(done), truncated, {'gamestate': gamestate}
     
     def close(self):
         if self.run:
@@ -239,6 +244,7 @@ class StackedCPUMeleeEnv(gym.Env):
         
         self.stack_size = config["n_stack"]
         self.stacked_obs = None
+        self.config = config
 
     def reset(self, *, seed=None, options=None):
         if self.run:
@@ -246,9 +252,9 @@ class StackedCPUMeleeEnv(gym.Env):
         with FileLock("thisislock.lock"):
             self.env.start()
         self.run = True
-        obs, gamestate = self.env.setup(enums.Stage.FINAL_DESTINATION)
+        obs, gamestate = self.env.setup(self.config["stage"])
         self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
-        return self.stacked_obs, {}
+        return self.stacked_obs, {'gamestate': gamestate}
     
     def step(self, action):
         truncated = False
@@ -258,7 +264,7 @@ class StackedCPUMeleeEnv(gym.Env):
         else:
             self.stacked_obs = np.roll(self.stacked_obs, -1, axis=0)
             self.stacked_obs[-1] = obs[self.agent_id - 1]
-        return self.stacked_obs.flatten(), reward[self.agent_id - 1], bool(done), truncated, {}
+        return self.stacked_obs.flatten(), reward[self.agent_id - 1], bool(done), truncated, {'gamestate': gamestate}
     
     def close(self):
         if self.run:
@@ -275,6 +281,7 @@ class MultiMeleeEnv(gym.Env):
         low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        self.config = config
         
     def reset(self, *, seed=None, options=None):
         if self.run:
@@ -282,7 +289,7 @@ class MultiMeleeEnv(gym.Env):
         with FileLock("thisislock.lock"):
             self.env.start()
         self.run = True
-        obs, gamestate = self.env.setup(enums.Stage.FINAL_DESTINATION)
+        obs, gamestate = self.env.setup(self.config["stage"])
         return gamestate, {} #gamestate, {}
     
     def step(self, actions):
@@ -297,7 +304,7 @@ class MultiMeleeEnv(gym.Env):
 # When our agent is training while op agent is not training
 class SelfPlayMeleeEnv(gym.Env):
     def __init__(self, config={}):
-        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays= config["save_replay"])
+        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays=config["save_replay"])
         # with FileLock("thisislock.lock"): self.env.start()
         self.run = False
         self.agent_id = config["agent_id"]
@@ -308,22 +315,53 @@ class SelfPlayMeleeEnv(gym.Env):
         
         models_ppo = {}
         device = torch.device('cpu')
-        models_ppo["policy"] = Policy(self.observation_space, self.action_space, device)
-        models_ppo["value"] = Value(self.observation_space, self.action_space, device)
         
-        cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-        cfg_ppo["state_preprocessor"] = RunningStandardScaler
-        cfg_ppo["state_preprocessor_kwargs"] = {"size": self.observation_space, "device": device}
-        cfg_ppo["value_preprocessor"] = RunningStandardScaler
-        cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
-        self.op_agent = PPOAgent(models=models_ppo,
-                cfg=cfg_ppo,
-                observation_space=self.observation_space,
-                action_space=self.action_space,
-                device=device, 
-                agent_id = 1 if self.agent_id == 2 else 2)
-        self.op_agent.load(config["op_model_path"])
-        self.op_agent.set_running_mode("eval")
+        if config["actor"].agent_type == AgentType.STACK:
+            low = np.array([-10000]*config["n_states"]*16, dtype=np.float32).reshape(-1)
+            high = np.array([10000]*config["n_states"]*16, dtype=np.float32).reshape(-1)
+            observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+            
+            models_ppo["policy"] = Policy(observation_space, self.action_space, device)
+            models_ppo["value"] = Value(observation_space, self.action_space, device)
+            
+            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
+            cfg_ppo["state_preprocessor"] = RunningStandardScaler
+            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
+            cfg_ppo["value_preprocessor"] = RunningStandardScaler
+            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
+            
+            self.op_agent = StackedPPOAgent(models=models_ppo,
+                    cfg=cfg_ppo,
+                    observation_space=observation_space,
+                    action_space=self.action_space,
+                    device=device, 
+                    agent_id = 1 if self.agent_id == 2 else 2,
+                    stack_size=16,)
+            
+        elif config["actor"].agent_type == AgentType.GRU:
+            low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
+            high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
+            observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+            
+            models_ppo["policy"] = GRUPolicy(observation_space, self.action_space, device)
+            models_ppo["value"] = GRUValue(observation_space, self.action_space, device)
+            
+            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
+            cfg_ppo["state_preprocessor"] = RunningStandardScaler
+            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
+            cfg_ppo["value_preprocessor"] = RunningStandardScaler
+            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
+            
+            self.op_agent = PPOGRUAgent(models=models_ppo,
+                    cfg=cfg_ppo,
+                    observation_space=observation_space,
+                    action_space=self.action_space,
+                    device=device, 
+                    agent_id = 1 if self.agent_id == 2 else 2)
+        
+        self.op_agent.load(config["actor"].model_path)
+        self.op_agent.set_mode("eval")
+        self.op_agent.init()
         
         self.gamestate = None
 
@@ -333,8 +371,9 @@ class SelfPlayMeleeEnv(gym.Env):
         with FileLock("thisislock.lock"):
             self.env.start()
         self.run = True
-        obs, self.gamestate = self.env.setup(enums.Stage.FINAL_DESTINATION)
-        return obs[self.agent_id - 1], {} #gamestate, {}
+        obs, self.gamestate = self.env.setup(self.config["stage"])
+        #self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
+        return obs[self.agent_id - 1], {'gamestate': self.gamestate}
     
     def step(self, action):
         truncated = False
@@ -343,7 +382,105 @@ class SelfPlayMeleeEnv(gym.Env):
         else:
             op_action = 0
         obs, reward, done, self.gamestate = self.env.step(action, op_action)
-        return obs[self.agent_id - 1], reward[self.agent_id - 1], bool(done), truncated, {}
+        return obs[self.agent_id - 1], reward[self.agent_id - 1], bool(done), truncated, {'gamestate': self.gamestate}
+    
+    def close(self):
+        if self.run:
+            with FileLock("thisislock.lock"): self.env.close()
+
+class StackedSelfPlayMeleeEnv(gym.Env):
+    def __init__(self, config={}):
+        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, 
+                            save_replays=config["save_replay"])
+        # with FileLock("thisislock.lock"): self.env.start()
+        self.run = False
+        self.agent_id = config["agent_id"]
+        self.action_space = gym.spaces.Discrete(config["n_actions"])
+        low = np.array([-10000]*config["n_states"] * config["n_stack"], dtype=np.float32).reshape(-1)
+        high = np.array([10000]*config["n_states"] * config["n_stack"], dtype=np.float32).reshape(-1)
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        
+        self.stack_size = config["n_stack"]
+        self.stacked_obs = None
+        self.config = config
+        
+        models_ppo = {}
+        device = torch.device('cpu')
+        
+        if config["actor"].agent_type == AgentType.STACK:
+            low = np.array([-10000]*config["n_states"]*16, dtype=np.float32).reshape(-1)
+            high = np.array([10000]*config["n_states"]*16, dtype=np.float32).reshape(-1)
+            observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+            
+            models_ppo["policy"] = Policy(observation_space, self.action_space, device)
+            models_ppo["value"] = Value(observation_space, self.action_space, device)
+            
+            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
+            cfg_ppo["state_preprocessor"] = RunningStandardScaler
+            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
+            cfg_ppo["value_preprocessor"] = RunningStandardScaler
+            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
+            
+            self.op_agent = StackedPPOAgent(models=models_ppo,
+                    cfg=cfg_ppo,
+                    observation_space=observation_space,
+                    action_space=self.action_space,
+                    device=device, 
+                    agent_id =  1 if self.agent_id == 2 else 2,
+                    stack_size=16,
+                    )
+            
+        elif config["actor"].agent_type == AgentType.GRU:
+            low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
+            high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
+            observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+            
+            models_ppo["policy"] = GRUPolicy(observation_space, self.action_space, device)
+            models_ppo["value"] = GRUValue(observation_space, self.action_space, device)
+            
+            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
+            cfg_ppo["state_preprocessor"] = RunningStandardScaler
+            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
+            cfg_ppo["value_preprocessor"] = RunningStandardScaler
+            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
+            
+            self.op_agent = PPOGRUAgent(models=models_ppo,
+                    cfg=cfg_ppo,
+                    observation_space=observation_space,
+                    action_space=self.action_space,
+                    device=device, 
+                    agent_id = 1 if self.agent_id == 2 else 2)
+        
+        self.op_agent.load(config["actor"].model_path)
+        self.op_agent.set_mode("eval")
+        self.op_agent.init()
+
+        self.gamestate = None
+
+    def reset(self, *, seed=None, options=None):
+        if self.run:
+            with FileLock("thisislock.lock"): self.env.close()
+        with FileLock("thisislock.lock"):
+            self.env.start()
+        self.run = True
+        obs, self.gamestate = self.env.setup(self.config["stage"])
+        self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
+
+        return self.stacked_obs, {'gamestate': self.gamestate}
+    
+    def step(self, action):
+        truncated = False
+        if self.gamestate is not None:
+            op_action, _ = self.op_agent.act(self.gamestate, 1, 0)
+        else:
+            op_action = 0
+        obs, reward, done, self.gamestate = self.env.step(action, op_action)
+        if self.stacked_obs is None:
+            self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
+        else:
+            self.stacked_obs = np.roll(self.stacked_obs, -1, axis=0)
+            self.stacked_obs[-1] = obs[self.agent_id - 1]
+        return self.stacked_obs.flatten(), reward[self.agent_id - 1], bool(done), truncated, {'gamestate': self.gamestate}
     
     def close(self):
         if self.run:
