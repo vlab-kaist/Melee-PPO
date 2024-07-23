@@ -64,7 +64,8 @@ def make_env(id, cpu_lvl):
             "agent_id": 1, # for 1p,
             "n_states": 808,
             "n_actions": 27,
-            "save_replay": False
+            "save_replay": False,
+            "stage": enums.Stage.FINAL_DESTINATION,
         }},
     )
     return gym.make(id)

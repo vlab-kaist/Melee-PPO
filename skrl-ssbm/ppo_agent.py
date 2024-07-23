@@ -199,7 +199,7 @@ class PPOGRUAgent(PPO_RNN):
         self.action = torch.tensor([[0]], device=self.device)
         self.action_cnt = 3
         self.players = players
-        self.gamestate
+        self.gamestate = None
         self.csv_path = csv_path
         self.is_selfplay = is_selfplay
         

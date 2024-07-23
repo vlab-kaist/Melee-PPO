@@ -244,7 +244,7 @@ class League:
             self.iter += 1
 
 if __name__ == "__main__":
-    pre_trained_model = "/home/tgkang/multi-env/skrl-ssbm/trained_model/CPUStackedDOC.pt"
+    pre_trained_model = "./trained_model/CPUStackedDOC.pt"
     exp_dir = "./LeagueSelfPlay"
     agent_dirs = [f"Agent{i}" for i in range(5)]
     os.makedirs(exp_dir, exist_ok=True)
