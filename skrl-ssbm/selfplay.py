@@ -277,6 +277,6 @@ if __name__ == "__main__":
 
     league = League(players,csv_path, exp_dir)
     league.clear()
-    #league.run()
-    league.match(league.players[0], league.players[1])
+    league.run()
+    #league.match(league.players[0], league.players[1])
     
