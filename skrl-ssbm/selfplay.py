@@ -142,7 +142,7 @@ class League:
             learner_model["value"] = GRUValue(env.observation_space, env.action_space, device)
             
             learner_agent = PPOGRUAgent(
-                    models=leaner_model,
+                    models=learner_model,
                     memory=memory,
                     cfg=self.cfg,
                     observation_space=env.observation_space,
@@ -174,14 +174,13 @@ class League:
         )
         return gym.make(id)
     
-    def pick_opp(self, player):
-        elos = [agent.elo for agent in self.players]
-        elos = torch.tensor(elos, dtype=torch.float32)
-        elos[player.id] = float('-inf')
+    def pick_opp(self, learner):
+        probs = torch.tensor([1 / (1 + 10 ** ((learner.elo - player.elo) / 4)) for player in self.players])
+        probs[learner.id] = float('-inf')
         softmax = torch.nn.Softmax(dim=0)
-        prob = softmax(elos)
-        op_id = torch.multinomial(prob, 1).item()
-        return op_id
+        prob = softmax(probs)
+        actor_id = torch.multinomial(prob, 1).item()
+        return actor_id
     
     def change(self):
         win_rates = [x.wins / (x.wins + x.loses + 0.01) for x in self.players[:5]]
@@ -244,7 +243,7 @@ class League:
             self.iter += 1
 
 if __name__ == "__main__":
-    pre_trained_model = "./trained_model/CPUStackedDOC.pt"
+    pre_trained_model = "/home/tgkang/Melee-PPO/skrl-ssbm/trained_model/TransformerGRUDOC.pt"
     exp_dir = "./LeagueSelfPlay"
     agent_dirs = [f"Agent{i}" for i in range(5)]
     os.makedirs(exp_dir, exist_ok=True)
@@ -252,15 +251,25 @@ if __name__ == "__main__":
         path = os.path.join(exp_dir, agent_dir)
         os.makedirs(path, exist_ok=True)
     players = [
-                ELOAgent(agent_type=AgentType.STACK, ID=0, model_path=os.path.join(exp_dir, "Agent0","recent.pt")),
-                ELOAgent(agent_type=AgentType.STACK, ID=1, model_path=os.path.join(exp_dir, "Agent1","recent.pt")),
-                ELOAgent(agent_type=AgentType.STACK, ID=2, model_path=os.path.join(exp_dir, "Agent2","recent.pt")),
-                ELOAgent(agent_type=AgentType.STACK, ID=3, model_path=os.path.join(exp_dir, "Agent3", "recent.pt")),
-                ELOAgent(agent_type=AgentType.STACK, ID=4, model_path=os.path.join(exp_dir, "Agent4", "recent.pt")),
+                ELOAgent(agent_type=AgentType.GRU, ID=0, model_path=os.path.join(exp_dir, "Agent0","recent.pt")),
+                ELOAgent(agent_type=AgentType.GRU, ID=1, model_path=os.path.join(exp_dir, "Agent1","recent.pt")),
+                ELOAgent(agent_type=AgentType.GRU, ID=2, model_path=os.path.join(exp_dir, "Agent2","recent.pt")),
+                ELOAgent(agent_type=AgentType.GRU, ID=3, model_path=os.path.join(exp_dir, "Agent3", "recent.pt")),
+                ELOAgent(agent_type=AgentType.GRU, ID=4, model_path=os.path.join(exp_dir, "Agent4", "recent.pt")),
                 ELOAgent(agent_type=AgentType.CPU, ID=5, level=5), 
                 ELOAgent(agent_type=AgentType.CPU, ID=6, level=7),
                 ELOAgent(agent_type=AgentType.CPU, ID=7, level=9),
                 ]
+    # players = [
+    #             ELOAgent(agent_type=AgentType.STACK, ID=0, model_path=os.path.join(exp_dir, "Agent0","recent.pt")),
+    #             ELOAgent(agent_type=AgentType.STACK, ID=1, model_path=os.path.join(exp_dir, "Agent1","recent.pt")),
+    #             ELOAgent(agent_type=AgentType.STACK, ID=2, model_path=os.path.join(exp_dir, "Agent2","recent.pt")),
+    #             ELOAgent(agent_type=AgentType.STACK, ID=3, model_path=os.path.join(exp_dir, "Agent3", "recent.pt")),
+    #             ELOAgent(agent_type=AgentType.STACK, ID=4, model_path=os.path.join(exp_dir, "Agent4", "recent.pt")),
+    #             ELOAgent(agent_type=AgentType.CPU, ID=5, level=5), 
+    #             ELOAgent(agent_type=AgentType.CPU, ID=6, level=7),
+    #             ELOAgent(agent_type=AgentType.CPU, ID=7, level=9),
+    #             ]
     for i in range(5):
         shutil.copy2(pre_trained_model, players[i].model_path)
     csv_path = os.path.join(exp_dir, "playerinfo.csv")
@@ -268,5 +277,6 @@ if __name__ == "__main__":
 
     league = League(players,csv_path, exp_dir)
     league.clear()
-    league.run()
+    #league.run()
+    league.match(league.players[0], league.players[1])
     
