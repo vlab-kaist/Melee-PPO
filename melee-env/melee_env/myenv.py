@@ -312,6 +312,7 @@ class SelfPlayMeleeEnv(gym.Env):
         low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        self.config = config
         
         models_ppo = {}
         device = torch.device('cpu')
