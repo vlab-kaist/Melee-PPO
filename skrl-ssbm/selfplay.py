@@ -63,7 +63,7 @@ class League:
             "n_actions": 27, # 25
             "save_replay": False,
             "n_stack": None,
-            "timesteps": 10000 # total timesteps for training
+            "timesteps": 50000 # total timesteps for training
         }
         self.players = players
         self.csv_path = csv_path
