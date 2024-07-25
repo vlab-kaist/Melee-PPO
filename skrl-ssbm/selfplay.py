@@ -63,7 +63,7 @@ class League:
             "n_actions": 27, # 25
             "save_replay": False,
             "n_stack": None,
-            "timesteps": 50000 # total timesteps for training
+            "timesteps": 10000 # total timesteps for training
         }
         self.players = players
         self.csv_path = csv_path
@@ -138,8 +138,10 @@ class League:
             
         elif learner.agent_type == AgentType.GRU:
             learner_model = {}
-            learner_model["policy"] = GRUPolicy(env.observation_space, env.action_space, device)
-            learner_model["value"] = GRUValue(env.observation_space, env.action_space, device)
+            learner_model["policy"] = GRUPolicy(env.observation_space, env.action_space, device,
+                                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+            learner_model["value"] = GRUValue(env.observation_space, env.action_space, device,
+                                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
             
             learner_agent = PPOGRUAgent(
                     models=learner_model,
@@ -154,10 +156,13 @@ class League:
                     is_selfplay=True
                 )
         
-        learner_agent.load(learner.model_path)
+        # learner_agent.load(learner.model_path)
+        
         learner_agent.experiment_dir = os.path.join(self.exp_dir, f"Agent{learner.id}")
         cfg_trainer = {"timesteps": self.config["timesteps"], "headless": True, "disable_progressbar": False}
         trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=learner_agent)
+        trainer.initial_timestep = self.iter * self.config["timesteps"]
+        trainer.timesteps += trainer.initial_timestep
         trainer.train()
         
         model_idx = self.config["timesteps"]
@@ -230,7 +235,7 @@ class League:
     
     def run(self):
         # TODO : need to modify this part
-        for _ in range(10000):
+        for _ in range(100000):
             self.clear()
             futures = []
             for learner_id in range(4):
@@ -243,7 +248,7 @@ class League:
             self.iter += 1
 
 if __name__ == "__main__":
-    pre_trained_model = "/home/tgkang/Melee-PPO/skrl-ssbm/trained_model/CPUGRUDOC.pt"
+    pre_trained_model = "/home/tgkang/trained_model/lightGRUinit.pt"
     exp_dir = "./LeagueSelfPlay"
     agent_dirs = [f"Agent{i}" for i in range(4)]
     os.makedirs(exp_dir, exist_ok=True)
@@ -254,7 +259,7 @@ if __name__ == "__main__":
                 ELOAgent(agent_type=AgentType.GRU, ID=0, model_path=os.path.join(exp_dir, "Agent0","recent.pt")),
                 ELOAgent(agent_type=AgentType.GRU, ID=1, model_path=os.path.join(exp_dir, "Agent1","recent.pt")),
                 ELOAgent(agent_type=AgentType.GRU, ID=2, model_path=os.path.join(exp_dir, "Agent2","recent.pt")),
-                ELOAgent(agent_type=AgentType.GRU, ID=3, model_path=os.path.join(exp_dir, "Agent3", "recent.pt")),
+                ELOAgent(agent_type=AgentType.GRU, ID=3, model_path=os.path.join(exp_dir, "Agent3","recent.pt")),
                 ELOAgent(agent_type=AgentType.CPU, ID=4, level=3), 
                 ELOAgent(agent_type=AgentType.CPU, ID=5, level=5),
                 ELOAgent(agent_type=AgentType.CPU, ID=6, level=7),
