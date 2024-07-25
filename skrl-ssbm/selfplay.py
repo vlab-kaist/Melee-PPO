@@ -63,7 +63,7 @@ class League:
             "n_actions": 27, # 25
             "save_replay": False,
             "n_stack": None,
-            "timesteps": 50000 # total timesteps for training
+            "timesteps": 3000 # total timesteps for training
         }
         self.players = players
         self.csv_path = csv_path
@@ -89,7 +89,7 @@ class League:
     def match(self, actor, learner):
         if actor.agent_type == AgentType.CPU:
             # learner first, actor last
-            self.config["players"] = [MyAgent(enums.Character.DOC), CPU(enums.Character.MARIO, actor.level)]
+            self.config["players"] = [MyAgent(enums.Character.DOC), CPU(enums.Character.DOC, actor.level)]
             
             if learner.agent_type == AgentType.STACK:
                 self.config["n_stack"] = 16
@@ -183,11 +183,11 @@ class League:
         return actor_id
     
     def change(self):
-        win_rates = [x.wins / (x.wins + x.loses + 0.01) for x in self.players[:5]]
+        win_rates = [x.wins / (x.wins + x.loses + 0.01) for x in self.players[:4]]
         if min(win_rates) <= 0.45:
             print("::POOL CHANGED::")
             worst_id = win_rates.index(min(win_rates))
-            copy_id = random.choice([x for x in range(0, 5) if x != worst_id])
+            copy_id = random.choice([x for x in range(0, 4) if x != worst_id])
             shutil.copy2(self.players[copy_id].model_path, self.players[worst_id].model_path)
             
             with open(self.csv_path, 'r', newline='') as file:
@@ -233,7 +233,7 @@ class League:
         for _ in range(10000):
             self.clear()
             futures = []
-            for learner_id in range(5):
+            for learner_id in range(4):
                 actor_id = self.pick_opp(self.players[learner_id])
                 futures.append((self.match, self.players[actor_id], self.players[learner_id]))
             with ProcessPoolExecutor(max_workers=32) as executor:
@@ -243,7 +243,7 @@ class League:
             self.iter += 1
 
 if __name__ == "__main__":
-    pre_trained_model = "/home/tgkang/Melee-PPO/skrl-ssbm/trained_model/TransformerGRUDOC.pt"
+    pre_trained_model = "/home/tgkang/Melee-PPO/skrl-ssbm/trained_model/CPUGRUDOC.pt"
     exp_dir = "./LeagueSelfPlay"
     agent_dirs = [f"Agent{i}" for i in range(5)]
     os.makedirs(exp_dir, exist_ok=True)
@@ -255,10 +255,9 @@ if __name__ == "__main__":
                 ELOAgent(agent_type=AgentType.GRU, ID=1, model_path=os.path.join(exp_dir, "Agent1","recent.pt")),
                 ELOAgent(agent_type=AgentType.GRU, ID=2, model_path=os.path.join(exp_dir, "Agent2","recent.pt")),
                 ELOAgent(agent_type=AgentType.GRU, ID=3, model_path=os.path.join(exp_dir, "Agent3", "recent.pt")),
-                ELOAgent(agent_type=AgentType.GRU, ID=4, model_path=os.path.join(exp_dir, "Agent4", "recent.pt")),
-                ELOAgent(agent_type=AgentType.CPU, ID=5, level=5), 
+                ELOAgent(agent_type=AgentType.CPU, ID=4, level=3), 
+                ELOAgent(agent_type=AgentType.CPU, ID=5, level=5),
                 ELOAgent(agent_type=AgentType.CPU, ID=6, level=7),
-                ELOAgent(agent_type=AgentType.CPU, ID=7, level=9),
                 ]
     # players = [
     #             ELOAgent(agent_type=AgentType.STACK, ID=0, model_path=os.path.join(exp_dir, "Agent0","recent.pt")),
@@ -270,7 +269,7 @@ if __name__ == "__main__":
     #             ELOAgent(agent_type=AgentType.CPU, ID=6, level=7),
     #             ELOAgent(agent_type=AgentType.CPU, ID=7, level=9),
     #             ]
-    for i in range(5):
+    for i in range(4):
         shutil.copy2(pre_trained_model, players[i].model_path)
     csv_path = os.path.join(exp_dir, "playerinfo.csv")
     shutil.copy2("./playerinfo_init.csv", csv_path)
