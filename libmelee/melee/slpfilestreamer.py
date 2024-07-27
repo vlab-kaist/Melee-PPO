@@ -93,9 +93,7 @@ class SLPFileStreamer:
         return wrapper
 
     def connect(self):
-        with (
-            open(self._path, mode="rb") if isinstance(self._path, str) else self._path
-        ) as file:
+        with open(self._path, mode="rb") as file:
             full = None
             try:
                 full = ubjson.loadb(file.read())

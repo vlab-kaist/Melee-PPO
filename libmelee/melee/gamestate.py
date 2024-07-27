@@ -182,7 +182,7 @@ class PlayerState(object):
         self.invulnerability_left = 0
         """(int): How many frames of invulnerability are left."""
         self.hitlag_left = 0
-        """(int): How many more frames of hitlag there is"""
+        """(bool): How many more frames of hitlag there is"""
         self.hitstun_frames_left = 0
         """(int): How many more frames of hitstun there is"""
         self.jumps_left = 0
@@ -233,7 +233,7 @@ class PlayerState(object):
         self.costume = 0
         """(int): Index for which costume the player is wearing"""
         self.cpu_level = False
-        """(int): CPU level of player. 0 for a libmelee-controller bot or human player."""
+        """(bool): CPU level of player. 0 for a libmelee-controller bot or human player."""
         self.is_holding_cpu_slider = False
         """(bool): Is the player holding the CPU slider in the character select screen?"""
         self.nickName = ""

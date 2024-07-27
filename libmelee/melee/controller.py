@@ -127,7 +127,6 @@ class Controller:
         self._is_dolphin = console.system == "dolphin"
         if self._is_dolphin:
             self.pipe_path = console.get_dolphin_pipes_path(port)
-            # print("::: port path", self.pipe_path)
             self.pipe = None
         else:
             try:
