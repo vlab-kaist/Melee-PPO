@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 
 def make_env(id, cpu_lvl):
-    players = [MyAgent(enums.Character.DOC), CPU(enums.Character.MARIO, cpu_lvl)]
+    players = [MyAgent(enums.Character.DOC), CPU(enums.Character.LUIGI, cpu_lvl)]
     register(
         id=id,
         entry_point=f'melee_env.myenv:{id}',
@@ -46,21 +46,22 @@ def make_env(id, cpu_lvl):
             "players": players,
             "agent_id": 1, # for 1p,
             "n_states": 808,
-            "n_actions": 27, # 25
+            "n_actions": 28, # 25
             "save_replay": True,
             "stage": enums.Stage.FINAL_DESTINATION,
         }},
     )
     return gym.make(id)
     
-env = make_env(id="MultiMeleeEnv", cpu_lvl=5)
+env = make_env(id="MultiMeleeEnv", cpu_lvl=9)
 device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 
 models_ppo = {}
+models_ppo = {}
 models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
-                                 hidden_size=512, sequence_length=64)
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
 models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
-                               hidden_size=512, sequence_length=64)
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["state_preprocessor"] = RunningStandardScaler
@@ -76,9 +77,9 @@ agent_ppo = PPOGRUAgent(models=models_ppo,
                 agent_id = 1)
 
 #model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-13_03-31-26-444904_PPOAgent/checkpoints/agent_15564800.pt"
-agent_model_path = "/home/tgkang/multi-env/skrl-ssbm/GRU_PPO/24-07-18_22-54-12-871436_PPOGRUAgent/checkpoints/agent_900000.pt"
+agent_model_path = "/home/tgkang/Melee-PPO/skrl-ssbm/TransformerGRU/checkpoints/agent_21600000.pt"
 agent_ppo.load(agent_model_path)
-agent_ppo.set_running_mode("eval")
+agent_ppo.set_mode("eval")
 agent_ppo.init()
 
 state, info = env.reset()

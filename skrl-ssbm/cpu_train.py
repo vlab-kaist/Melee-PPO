@@ -63,7 +63,7 @@ def make_env(id, cpu_lvl):
             "players": players,
             "agent_id": 1, # for 1p,
             "n_states": 808,
-            "n_actions": 27,
+            "n_actions": 28,
             "save_replay": False,
             "stage": enums.Stage.FINAL_DESTINATION,
         }},
@@ -88,8 +88,10 @@ device = env.device
 memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
-models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs)
-models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=env.num_envs) #Value(env.observation_space, env.action_space, device)
+models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=env.num_envs,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) #Value(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["rollouts"] = 8192  # memory_size
@@ -98,8 +100,8 @@ cfg_ppo["mini_batches"] = 8
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.95
 cfg_ppo["learning_rate"] = 1e-5  # Lower the learning rate
-# cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
-# cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
+cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
+cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
 cfg_ppo["grad_norm_clip"] = 1.0
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
@@ -132,6 +134,5 @@ cfg_trainer = {"timesteps": args.timesteps, "headless": True}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
 trainer.initial_timestep = args.init_timestep
 trainer.timesteps += args.init_timestep
-
 
 trainer.train() 

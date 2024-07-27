@@ -46,8 +46,9 @@ def make_env(id):
             "players": players,
             "agent_id": 1, # for 1p,
             "n_states": 808,
-            "n_actions": 27,
-            "save_replay": True
+            "n_actions": 28,
+            "save_replay": True,
+            "stage": enums.Stage.FINAL_DESTINATION,
         }},
     )
     return gym.make(id)
@@ -56,9 +57,10 @@ env = make_env(id="MultiMeleeEnv")
 device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 
 models_ppo = {}
-models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device)
-models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device)
-
+models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["state_preprocessor"] = RunningStandardScaler
 cfg_ppo["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
@@ -80,12 +82,12 @@ op_ppo = PPOGRUAgent(models=models_ppo,
                 agent_id = 2)
 
 #model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-13_03-31-26-444904_PPOAgent/checkpoints/agent_15564800.pt"
-agent_model_path = "/home/tgkang/multi-env/skrl-ssbm/TransformerGRU/checkpoints/recent_model.pt"
+agent_model_path = "/home/tgkang/Melee-PPO/skrl-ssbm/TransformerGRU/checkpoints/best_agent.pt"
 agent_ppo.load(agent_model_path)
 agent_ppo.set_running_mode("eval")
 agent_ppo.init()
 
-op_model_path = "/home/tgkang/multi-env/skrl-ssbm/TransformerGRU/checkpoints/recent_model.pt"
+op_model_path ="/home/tgkang/Melee-PPO/skrl-ssbm/TransformerGRU/checkpoints/best_agent.pt"
 op_ppo.load(op_model_path)
 op_ppo.set_running_mode("eval")
 op_ppo.init()
