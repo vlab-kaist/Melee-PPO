@@ -4,6 +4,7 @@ import gymnasium as gym
 from gymnasium.envs.registration import register
 from gymnasium.wrappers import TransformObservation
 import psutil
+import shutil
 from enum import Enum
 from concurrent.futures import ProcessPoolExecutor
 import csv
@@ -56,8 +57,8 @@ class League:
             "stage": enums.Stage.FINAL_DESTINATION,
             "players": None,
             "agent_id": 1,
-            "n_states": 808,
-            "n_actions": 27, # 25
+            "n_states": 869, #808,
+            "n_actions": 29, # 25
             "save_replay": False,
             "n_stack": None,
             "timesteps": 50000 # total timesteps for training
@@ -106,8 +107,8 @@ class League:
         device = env.device
         memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
         
-        self.cfg["state_preprocessor"] = RunningStandardScaler
-        self.cfg["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
+        #self.cfg["state_preprocessor"] = RunningStandardScaler
+        #self.cfg["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
         self.cfg["value_preprocessor"] = RunningStandardScaler
         self.cfg["value_preprocessor_kwargs"] = {"size": 1, "device": device}
         self.cfg["experiment"]["write_interval"] = 8192
@@ -278,6 +279,6 @@ if __name__ == "__main__":
 
     league = League(players,csv_path, exp_dir)
     league.clear()
-    league.run()
+    #league.run()
     #league.match(league.players[0], league.players[1])
     

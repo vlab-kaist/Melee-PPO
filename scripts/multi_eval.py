@@ -42,8 +42,8 @@ def make_env(id):
             "iso_path": args.iso,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 808,
-            "n_actions": 28,
+            "n_states": 869,
+            "n_actions": 29,
             "save_replay": True,
             "stage": enums.Stage.FINAL_DESTINATION,
         }},
@@ -92,9 +92,10 @@ op_ppo.init()
 state, info = env.reset()
 done = False
 while not done:
-    with torch.no_grad():
-        action, _ = agent_ppo.act(state, 1, 0)
-        op_action, _ = op_ppo.act(state, 1, 0)
-    next_state, reward, done, truncated, info = env.step((action, op_action))
+    # with torch.no_grad():
+    #     action, _ = agent_ppo.act(state, 1, 0)
+    #     op_action, _ = op_ppo.act(state, 1, 0)
+    next_state, reward, done, truncated, info = env.step((0, 0))
+    print(state.player[1].x, state.player[2].x)
     state = next_state
     

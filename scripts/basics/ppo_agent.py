@@ -6,6 +6,7 @@ from torch.distributions.categorical import Categorical
 from skrl.agents.torch.ppo import PPO, PPO_RNN, PPO_DEFAULT_CONFIG
 
 import melee
+from melee import enums
 import numpy as np
 from enum import Enum
     
@@ -280,11 +281,27 @@ class PPOGRUAgent(PPO_RNN):
     
 
 def state_preprocess(gamestate, agent_id):
+    proj_mapping = {
+            enums.ProjectileType.MARIO_FIREBALL: 0,
+            enums.ProjectileType.DR_MARIO_CAPSULE: 1,
+            enums.ProjectileType.LINK_BOMB: 2,
+            enums.ProjectileType.LINK_HOOKSHOT: 3,
+            enums.ProjectileType.LINK_ARROW: 4,
+            enums.ProjectileType.PIKACHU_THUNDER: 5,
+            enums.ProjectileType.MARIO_CAPE: 6,
+            enums.ProjectileType.DR_MARIO_CAPE: 7,
+            enums.ProjectileType.YOSHI_EGG_THROWN: 8,
+            enums.ProjectileType.YOSHI_TONGUE: 9,
+            enums.ProjectileType.YOSHI_STAR: 10,
+            enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
+            enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
+            enums.ProjectileType.LUIGI_FIRE: 13
+        }
     p1 = gamestate.players[1]
     p2 = gamestate.players[2]
     edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
             
-    state1 = np.zeros((808,), dtype=np.float32)
+    state1 = np.zeros((869,), dtype=np.float32)
     
     state1[0] = p1.position.x / edge_pos
     state1[1] = p1.position.y / edge_pos
@@ -323,16 +340,31 @@ def state_preprocess(gamestate, agent_id):
     state1[34] = (p1.action_frame - 15) / 15
     state1[35] = (p2.action_frame - 15) / 15
     
+    state1[36] = (p1.ecb.top.y - 12) / 2.5
+    state1[37] = (p1.ecb.bottom.y - 2) / 2
+    state1[38] = (p1.ecb.left.x - 2.7)
+    state1[39] = (p1.ecb.left.y - 7) / 2
+    state1[40] = p1.ecb.right.x + 2.8
+    state1[41] = (p1.ecb.right.y + 2.8) / 10
+    
     if p1.action.value < 386:
-        state1[36 + p1.action.value] = 1.0
+        state1[41 + p1.action.value] = 1.0
     if p2.action.value < 386:
-        state1[36 + 386 + p2.action.value] = 1.0
-    # need to consider projectile, ecb, 
+        state1[41 + 386 + p2.action.value] = 1.0
+    
+    # if the type is same, then apply only once
+    projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]
+    for i, proj in enumerate(projs):
+        state1[41 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
+        state1[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+        state1[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
+        state1[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
+        
+    
     p1 = gamestate.players[2]
     p2 = gamestate.players[1]
+    state2 = np.zeros((869,), dtype=np.float32)
     # state for player 2
-    state2 = np.zeros((808,), dtype=np.float32) 
-
     state2[0] = p1.position.x / edge_pos
     state2[1] = p1.position.y / edge_pos
     state2[2] = p2.position.x / edge_pos
@@ -369,10 +401,23 @@ def state_preprocess(gamestate, agent_id):
     state2[33] = p2.speed_y_self
     state2[34] = (p1.action_frame - 15) / 15
     state2[35] = (p2.action_frame - 15) / 15
-                    
+    
+    state2[36] = (p1.ecb.top.y - 12) / 2.5
+    state2[37] = (p1.ecb.bottom.y - 2) / 2
+    state2[38] = (p1.ecb.left.x - 2.7)
+    state2[39] = (p1.ecb.left.y - 7) / 2
+    state2[40] = p1.ecb.right.x + 2.8
+    state2[41] = (p1.ecb.right.y + 2.8) / 10              
     if p1.action.value < 386:
-        state2[36 + p1.action.value] = 1.0
+        state2[41 + p1.action.value] = 1.0
     if p2.action.value < 386:
-        state2[36 + 386 + p2.action.value] = 1.0
+        state2[41 + 386 + p2.action.value] = 1.0
+    # if the type is same, then apply only once
+    projs = [x for x in gamestate.projectiles if x.owner == 1 and x.type in proj_mapping.keys()]
+    for i, proj in enumerate(projs):
+        state2[41 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
+        state2[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+        state2[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
+        state2[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
     
     return state1 if agent_id == 1 else state2

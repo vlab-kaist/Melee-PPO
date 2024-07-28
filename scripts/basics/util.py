@@ -1,5 +1,6 @@
 import numpy as np
 import melee
+from melee import enums
 from math import log
 
 class ObservationSpace:
@@ -12,6 +13,23 @@ class ObservationSpace:
         self.player_count = None
         self.current_frame = 0
         self.intial_process_complete = False
+        
+        self.proj_mapping = {
+            enums.ProjectileType.MARIO_FIREBALL: 0,
+            enums.ProjectileType.DR_MARIO_CAPSULE: 1,
+            enums.ProjectileType.LINK_BOMB: 2,
+            enums.ProjectileType.LINK_HOOKSHOT: 3,
+            enums.ProjectileType.LINK_ARROW: 4,
+            enums.ProjectileType.PIKACHU_THUNDER: 5,
+            enums.ProjectileType.MARIO_CAPE: 6,
+            enums.ProjectileType.DR_MARIO_CAPE: 7,
+            enums.ProjectileType.YOSHI_EGG_THROWN: 8,
+            enums.ProjectileType.YOSHI_TONGUE: 9,
+            enums.ProjectileType.YOSHI_STAR: 10,
+            enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
+            enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
+            enums.ProjectileType.LUIGI_FIRE: 13
+        }
 
     def __call__(self, gamestate):
         reward = (0, 0)
@@ -86,7 +104,7 @@ class ObservationSpace:
         p2 = gamestate.players[2]
         edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
                 
-        state1 = np.zeros((808,), dtype=np.float32)
+        state1 = np.zeros((869,), dtype=np.float32)
         
         state1[0] = p1.position.x / edge_pos
         state1[1] = p1.position.y / edge_pos
@@ -124,17 +142,32 @@ class ObservationSpace:
         state1[33] = p2.speed_y_self
         state1[34] = (p1.action_frame - 15) / 15
         state1[35] = (p2.action_frame - 15) / 15
-                                
-        if p1.action.value < 386:
-            state1[36 + p1.action.value] = 1.0
-        if p2.action.value < 386:
-            state1[36 + 386 + p2.action.value] = 1.0
-        # need to consider projectile, ecb, 
         
+        state1[36] = (p1.ecb.top.y - 12) / 2.5
+        state1[37] = (p1.ecb.bottom.y - 2) / 2
+        state1[38] = (p1.ecb.left.x - 2.7)
+        state1[39] = (p1.ecb.left.y - 7) / 2
+        state1[40] = p1.ecb.right.x + 2.8
+        state1[41] = (p1.ecb.right.y + 2.8) / 10
+        
+        if p1.action.value < 386:
+            state1[41 + p1.action.value] = 1.0
+        if p2.action.value < 386:
+            state1[41 + 386 + p2.action.value] = 1.0
+        
+        # if the type is same, then apply only once
+        projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in self.proj_mapping.keys()]
+        for i, proj in enumerate(projs):
+            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type]] = proj.position.x / edge_pos
+            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 2] = proj.speed.x / 2
+            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 3] = proj.speed.y / 2
+        
+            
         p1 = gamestate.players[2]
         p2 = gamestate.players[1]
         # state for player 2
-        state2 = np.zeros((808,), dtype=np.float32) 
+        state2 = np.zeros((869,), dtype=np.float32) 
 
         state2[0] = p1.position.x / edge_pos
         state2[1] = p1.position.y / edge_pos
@@ -172,11 +205,24 @@ class ObservationSpace:
         state2[33] = p2.speed_y_self
         state2[34] = (p1.action_frame - 15) / 15
         state2[35] = (p2.action_frame - 15) / 15
-                        
+        
+        state2[36] = (p1.ecb.top.y - 12) / 2.5
+        state2[37] = (p1.ecb.bottom.y - 2) / 2
+        state2[38] = (p1.ecb.left.x - 2.7)
+        state2[39] = (p1.ecb.left.y - 7) / 2
+        state2[40] = p1.ecb.right.x + 2.8
+        state2[41] = (p1.ecb.right.y + 2.8) / 10              
         if p1.action.value < 386:
-            state2[36 + p1.action.value] = 1.0
+            state2[41 + p1.action.value] = 1.0
         if p2.action.value < 386:
-            state2[36 + 386 + p2.action.value] = 1.0
+            state2[41 + 386 + p2.action.value] = 1.0
+        # if the type is same, then apply only once
+        projs = [x for x in gamestate.projectiles if x.owner == 1 and x.type in self.proj_mapping.keys()]
+        for i, proj in enumerate(projs):
+            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type]] = proj.position.x / edge_pos
+            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 2] = proj.speed.x / 2
+            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 3] = proj.speed.y / 2
         
         return (state1, state2), reward, done, gamestate
 
@@ -189,35 +235,35 @@ class ActionSpace:
         mid = np.sqrt(2) / 2
         self.action_space = np.array(
             [
-                [0, 0, 0],
-                [-1, 0, 0],  # 0
-                [1, 0, 0],  # 1
-                [0, -1, 0],  # 2
-                [0, 0, 1],  # 3
-                [0, -1, 1],  # 4
-                [-1, 0, 1],  # 5
-                [1, 0, 1],  # 6
-                [0, 0, 2], # 7
-                [-1, 0, 2], # 8
-                [1, 0, 2], # 9
-                [0, -1, 2],  # 10
-                [0, 1, 2],  # 11
-                [-mid, mid, 2],  # 12
-                [mid, mid, 2],  # 13
-                [0, 0, 3],  # 14
-                [-1, 0, 3],  # 15
-                [1, 0, 3],  # 16
-                [0, -1, 3],  # 17
-                [0, 0, 4],  # 18
-                [-1, 0, 5],  # 19
-                [1, 0, 5],  # 20
-                [0, 0, 5],  # 21
-                [-mid, mid, 5],  # 22
-                [mid, mid, 5],  # 23
-                [1, 0, 6],  # 24
-                [-1, 0, 6],  # 25
-                [0, 1, 6],  # 26
-                [0, -1, 6],  # 27
+                [0, 0, 0], #0
+                [-1, 0, 0],  # 1
+                [1, 0, 0],  # 2
+                [0, -1, 0],  # 3
+                [0, 0, 1],  # 4
+                [0, -1, 1],  # 5
+                [-1, 0, 1],  # 6
+                [1, 0, 1],  # 7
+                [0, 0, 2], # 8
+                [-1, 0, 2], # 9
+                [1, 0, 2], # 10
+                [0, -1, 2],  # 11
+                [0, 1, 2],  # 12
+                [-mid, mid, 2],  # 13
+                [mid, mid, 2],  # 14
+                [0, 0, 3],  # 15
+                [-1, 0, 3],  # 16
+                [1, 0, 3],  # 17
+                [0, -1, 3],  # 18
+                [0, 0, 4],  # 19
+                [-1, 0, 5],  # 20
+                [1, 0, 5],  # 21
+                [0, 0, 5],  # 22
+                [-mid, mid, 5],  # 23
+                [mid, mid, 5],  # 24
+                [1, 0, 6],  # 25
+                [-1, 0, 6],  # 26
+                [0, 1, 6],  # 27
+                [0, -1, 6],  # 28
             ],
             dtype=np.float32,
         )
@@ -240,8 +286,8 @@ class ControlState: # need to change
             melee.enums.Button.BUTTON_A, #1
             melee.enums.Button.BUTTON_B, #2
             melee.enums.Button.BUTTON_Z, #3
-            melee.enums.Button.BUTTON_R, #4
-            melee.enums.Button.BUTTON_X, #5
+            melee.enums.Button.BUTTON_L, #4
+            melee.enums.Button.BUTTON_Y, #5
             melee.enums.Button.BUTTON_C #6
             ]
         
@@ -249,7 +295,7 @@ class ControlState: # need to change
         controller.release_all()      
         if self.state[2]:
             if self.state[2] == 4.0:
-                controller.press_shoulder(melee.enums.Button.BUTTON_R, 1)
+                controller.press_shoulder(melee.enums.Button.BUTTON_L, 1.0)
             elif self.state[2] == 6.0:
                 controller.tilt_analog_unit(melee.enums.Button.BUTTON_C, 
                                     self.state[0], self.state[1])

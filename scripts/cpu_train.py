@@ -65,8 +65,8 @@ def make_env(id, cpu_lvl):
             "iso_path": iso_path,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 808,
-            "n_actions": 28,
+            "n_states": 869, #808,
+            "n_actions": 29, #28,
             "save_replay": False,
             "stage": enums.Stage.FINAL_DESTINATION,
         }},
@@ -112,8 +112,8 @@ cfg_ppo["clip_predicted_values"] = False
 cfg_ppo["entropy_loss_scale"] = 0.02  # Increase entropy loss scale for more exploration
 cfg_ppo["value_loss_scale"] = 0.5
 cfg_ppo["kl_threshold"] = 0
-cfg_ppo["state_preprocessor"] = RunningStandardScaler
-cfg_ppo["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
+#cfg_ppo["state_preprocessor"] = RunningStandardScaler
+#cfg_ppo["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
 cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints 
