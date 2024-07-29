@@ -11,7 +11,7 @@ from tqdm import tqdm
 character = "PIKACHU"
 script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
-save_dir = "./TransformerGRU2"
+save_dir = "./TransformerGRU"
 init_timestep = 0
 timesteps = 18000
 save_freq = timesteps
@@ -28,7 +28,7 @@ def run_command(cmd):
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=60 * 6,
                 check=True
             )
     except subprocess.CalledProcessError as e:
