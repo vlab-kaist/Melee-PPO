@@ -49,6 +49,9 @@ parser.add_argument(
 parser.add_argument(
     "--character", default=None, type=str, help="Character to train"
 )
+parser.add_argument(
+    "--stage", default="FINAL_DESTINATION", type=str, help="stages to play"
+)
 
 args = parser.parse_args()
 
@@ -65,10 +68,10 @@ def make_env(id, cpu_lvl):
             "iso_path": iso_path,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 869, #808,
+            "n_states": 869 if args.stage == "FINAL_DESTINATION" else 885,
             "n_actions": 29, #28,
             "save_replay": False,
-            "stage": enums.Stage.FINAL_DESTINATION,
+            "stage": getattr(enums.Stage, args.stage),
         }},
     )
     return gym.make(id)

@@ -8,16 +8,18 @@ import signal
 from tqdm import tqdm
 
 # characters = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
-character = "LINK"
+# stages = ["BATTLEFIELD", "FINAL_DESTINATION", "POKEMON_STADIUM"]
+character = "YOSHI"
+stage = "BATTLEFIELD"
 script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
-save_dir = "./TransformerGRU"
+save_dir = "./PlatformYOSHI"
 init_timestep = 0
 timesteps = 18000
 save_freq = timesteps
 model_path = None
 
-real_freq = timesteps * 100
+real_freq = timesteps * 50
 
 recent_model = os.path.join(save_dir, "checkpoints", "recent_model.pt")
 
@@ -55,6 +57,7 @@ cmd = (
         f"--timesteps {timesteps} "
         f"--save_freq {save_freq} "
         f"--character {character} "
+        f"--stage {stage} "
     )
 
 run_command(cmd)
@@ -73,6 +76,7 @@ for i in tqdm(range(1, 10001), ncols=50):
         f"--save_freq {save_freq} "
         f"--model_path {recent_model} "
         f"--character {character} "
+        f"--stage {stage} "
     )
 
     run_command(cmd)

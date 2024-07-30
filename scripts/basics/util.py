@@ -13,23 +13,94 @@ class ObservationSpace:
         self.player_count = None
         self.current_frame = 0
         self.intial_process_complete = False
+
+    def __call__(self, gamestate):
+        reward = (0, 0)
+        info = None
+        self.current_gamestate = gamestate
+        self.player_count = len(list(gamestate.players.keys()))
         
-        self.proj_mapping = {
-            enums.ProjectileType.MARIO_FIREBALL: 0,
-            enums.ProjectileType.DR_MARIO_CAPSULE: 1,
-            enums.ProjectileType.LINK_BOMB: 2,
-            enums.ProjectileType.LINK_HOOKSHOT: 3,
-            enums.ProjectileType.LINK_ARROW: 4,
-            enums.ProjectileType.PIKACHU_THUNDER: 5,
-            enums.ProjectileType.MARIO_CAPE: 6,
-            enums.ProjectileType.DR_MARIO_CAPE: 7,
-            enums.ProjectileType.YOSHI_EGG_THROWN: 8,
-            enums.ProjectileType.YOSHI_TONGUE: 9,
-            enums.ProjectileType.YOSHI_STAR: 10,
-            enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
-            enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
-            enums.ProjectileType.LUIGI_FIRE: 13
-        }
+        if self.previous_gamestate is not None:
+            p1_dmg = (
+                self.current_gamestate.players[1].percent
+                - self.previous_gamestate.players[1].percent
+            )
+            p1_shield_dmg = (
+                self.previous_gamestate.players[1].shield_strength
+                - self.current_gamestate.players[1].shield_strength
+            ) / (self.current_gamestate.players[1].shield_strength + 1)
+            
+            # animation enum <= 10 denote dead
+            p1_stock_loss = 0.0
+            if (self.current_gamestate.players[1].action.value <= 10 and 
+                self.previous_gamestate.players[1].action.value > 10):
+                p1_stock_loss = 1.0
+            
+            p2_dmg = (
+                self.current_gamestate.players[2].percent
+                - self.previous_gamestate.players[2].percent
+            )
+            p2_shield_dmg = (
+                self.previous_gamestate.players[2].shield_strength
+                - self.current_gamestate.players[2].shield_strength
+            ) / (self.current_gamestate.players[2].shield_strength + 1)
+            p2_stock_loss = 0.0
+            if (self.current_gamestate.players[2].action.value <= 10 and 
+                self.previous_gamestate.players[2].action.value > 10):
+                p2_stock_loss = 1.0
+            # low percent is more good => efficient kill
+            p1_stock_loss *= abs(200 - self.current_gamestate.players[1].percent) / 200
+            p2_stock_loss *= abs(200 - self.current_gamestate.players[2].percent) / 200
+
+            p1_dmg = max(p1_dmg, 0)
+            p2_dmg = max(p2_dmg, 0)
+            if p1_stock_loss > 1:
+                p1_stock_loss = 0
+            if p2_stock_loss > 1:
+                p2_stock_loss = 0
+            p1_stock_loss = max(p1_stock_loss, 0)
+            p2_stock_loss = max(p2_stock_loss, 0)
+            p1_shield_dmg = max(p1_shield_dmg, 0)
+            p2_shield_dmg = max(p2_shield_dmg, 0)
+
+            w_dmg, w_shield, w_stock = 0.2, 0.3, 6
+            p1_loss = (
+                w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
+            )
+            p2_loss = (
+                w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
+            )
+            
+            reward = (p2_loss - p1_loss, p1_loss - p2_loss)
+        else:
+            reward = (0, 0)
+
+        self.previous_gamestate = self.current_gamestate
+
+        stocks = np.array(
+            [gamestate.players[i].stock for i in list(gamestate.players.keys())]
+        )
+        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
+        
+        state1 = state_preprocess(gamestate, 1, platform=False)
+        state2 = state_preprocess(gamestate, 2, platform=False)
+        
+        return (state1, state2), reward, done, gamestate
+
+    def _reset(self):
+        self.__init__()
+        print("observation space got reset!")
+
+class PlatformObservationSpace:
+    def __init__(self):
+        self.previous_observation = np.empty(0)
+        self.previous_gamestate = None
+        self.current_gamestate = None
+        # should we save previous gamestates? stack obs? vs lstm?
+        self.curr_action = None
+        self.player_count = None
+        self.current_frame = 0
+        self.intial_process_complete = False
 
     def __call__(self, gamestate):
         reward = (0, 0)
@@ -100,129 +171,8 @@ class ObservationSpace:
         done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
         
         # state for player 1
-        p1 = gamestate.players[1]
-        p2 = gamestate.players[2]
-        edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
-                
-        state1 = np.zeros((869,), dtype=np.float32)
-        
-        state1[0] = p1.position.x / edge_pos
-        state1[1] = p1.position.y / edge_pos
-        state1[2] = p2.position.x / edge_pos
-        state1[3] = p2.position.y / edge_pos
-        state1[4] = gamestate.distance / 20
-        state1[5] = (edge_pos - abs(p1.position.x)) / edge_pos
-        state1[6] = (edge_pos - abs(p2.position.x)) / edge_pos
-        state1[7] = 1.0 if p1.facing else -1.0
-        state1[8] = 1.0 if p2.facing else -1.0
-        state1[9] = 1.0 if (p1.position.x - p2.position.x) * state1[7] < 0 else -1.0
-        state1[10] = p1.hitstun_frames_left / 10
-        state1[11] = p2.hitstun_frames_left / 10
-        state1[12] = p1.invulnerability_left / 20
-        state1[13] = p2.invulnerability_left / 20
-        state1[14] = p1.jumps_left - 1
-        state1[15] = p2.jumps_left - 1
-        state1[16] = p1.off_stage * 1.0
-        state1[17] = p2.off_stage * 1.0
-        state1[18] = p1.on_ground * 1.0
-        state1[19] = p2.on_ground * 1.0
-        state1[20] = (p1.percent - 50) / 50
-        state1[21] = (p2.percent - 50) / 50
-        state1[22] = (p1.shield_strength - 30) / 30
-        state1[23] = (p2.shield_strength - 30) / 30
-        state1[24] = p1.speed_air_x_self / 2
-        state1[25] = p2.speed_air_x_self / 2
-        state1[26] = p1.speed_ground_x_self / 2
-        state1[27] = p2.speed_ground_x_self / 2
-        state1[28] = p1.speed_x_attack
-        state1[29] = p2.speed_x_attack
-        state1[30] = p1.speed_y_attack
-        state1[31] = p2.speed_y_attack
-        state1[32] = p1.speed_y_self
-        state1[33] = p2.speed_y_self
-        state1[34] = (p1.action_frame - 15) / 15
-        state1[35] = (p2.action_frame - 15) / 15
-        
-        state1[36] = (p1.ecb.top.y - 12) / 2.5
-        state1[37] = (p1.ecb.bottom.y - 2) / 2
-        state1[38] = (p1.ecb.left.x - 2.7)
-        state1[39] = (p1.ecb.left.y - 7) / 2
-        state1[40] = p1.ecb.right.x + 2.8
-        state1[41] = (p1.ecb.right.y + 2.8) / 10
-        
-        if p1.action.value < 386:
-            state1[41 + p1.action.value] = 1.0
-        if p2.action.value < 386:
-            state1[41 + 386 + p2.action.value] = 1.0
-        
-        # if the type is same, then apply only once
-        projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in self.proj_mapping.keys()]
-        for i, proj in enumerate(projs):
-            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type]] = proj.position.x / edge_pos
-            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
-            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 2] = proj.speed.x / 2
-            state1[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 3] = proj.speed.y / 2
-        
-            
-        p1 = gamestate.players[2]
-        p2 = gamestate.players[1]
-        # state for player 2
-        state2 = np.zeros((869,), dtype=np.float32) 
-
-        state2[0] = p1.position.x / edge_pos
-        state2[1] = p1.position.y / edge_pos
-        state2[2] = p2.position.x / edge_pos
-        state2[3] = p2.position.y / edge_pos
-        state2[4] = gamestate.distance / 20
-        state2[5] = (edge_pos - abs(p1.position.x)) / edge_pos
-        state2[6] = (edge_pos - abs(p2.position.x)) / edge_pos
-        state2[7] = 1.0 if p1.facing else -1.0
-        state2[8] = 1.0 if p2.facing else -1.0
-        state2[9] = 1.0 if (p1.position.x - p2.position.x) * state2[7] < 0 else -1.0
-        state2[10] = p1.hitstun_frames_left / 10
-        state2[11] = p2.hitstun_frames_left / 10
-        state2[12] = p1.invulnerability_left / 20
-        state2[13] = p2.invulnerability_left / 20
-        state2[14] = p1.jumps_left - 1
-        state2[15] = p2.jumps_left - 1
-        state2[16] = p1.off_stage * 1.0
-        state2[17] = p2.off_stage * 1.0
-        state2[18] = p1.on_ground * 1.0
-        state2[19] = p2.on_ground * 1.0
-        state2[20] = (p1.percent - 50) / 50
-        state2[21] = (p2.percent - 50) / 50
-        state2[22] = (p1.shield_strength - 30) / 30
-        state2[23] = (p2.shield_strength - 30) / 30
-        state2[24] = p1.speed_air_x_self / 2
-        state2[25] = p2.speed_air_x_self / 2
-        state2[26] = p1.speed_ground_x_self / 2
-        state2[27] = p2.speed_ground_x_self / 2
-        state2[28] = p1.speed_x_attack
-        state2[29] = p2.speed_x_attack
-        state2[30] = p1.speed_y_attack
-        state2[31] = p2.speed_y_attack
-        state2[32] = p1.speed_y_self
-        state2[33] = p2.speed_y_self
-        state2[34] = (p1.action_frame - 15) / 15
-        state2[35] = (p2.action_frame - 15) / 15
-        
-        state2[36] = (p1.ecb.top.y - 12) / 2.5
-        state2[37] = (p1.ecb.bottom.y - 2) / 2
-        state2[38] = (p1.ecb.left.x - 2.7)
-        state2[39] = (p1.ecb.left.y - 7) / 2
-        state2[40] = p1.ecb.right.x + 2.8
-        state2[41] = (p1.ecb.right.y + 2.8) / 10              
-        if p1.action.value < 386:
-            state2[41 + p1.action.value] = 1.0
-        if p2.action.value < 386:
-            state2[41 + 386 + p2.action.value] = 1.0
-        # if the type is same, then apply only once
-        projs = [x for x in gamestate.projectiles if x.owner == 1 and x.type in self.proj_mapping.keys()]
-        for i, proj in enumerate(projs):
-            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type]] = proj.position.x / edge_pos
-            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
-            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 2] = proj.speed.x / 2
-            state2[41 + 386 * 2 + 4 * self.proj_mapping[proj.type] + 3] = proj.speed.y / 2
+        state1 = state_preprocess(gamestate, 1, platform=True)
+        state2 = state_preprocess(gamestate, 2, platform=True)
         
         return (state1, state2), reward, done, gamestate
 
@@ -305,18 +255,135 @@ class ControlState: # need to change
             controller.tilt_analog_unit(melee.enums.Button.BUTTON_MAIN, 
                                         self.state[0], self.state[1])
         
-def from_observation_space(act):
-    def get_observation(self, *args):
-        gamestate = args[0]
-        observation = self.observation_space(gamestate)
-        return act(self, observation)
-    return get_observation
+def state_preprocess(gamestate, agent_id, platform=False):
+    proj_mapping = {
+            enums.ProjectileType.MARIO_FIREBALL: 0,
+            enums.ProjectileType.DR_MARIO_CAPSULE: 1,
+            enums.ProjectileType.LINK_BOMB: 2,
+            enums.ProjectileType.LINK_HOOKSHOT: 3,
+            enums.ProjectileType.LINK_ARROW: 4,
+            enums.ProjectileType.PIKACHU_THUNDER: 5,
+            enums.ProjectileType.MARIO_CAPE: 6,
+            enums.ProjectileType.DR_MARIO_CAPE: 7,
+            enums.ProjectileType.YOSHI_EGG_THROWN: 8,
+            enums.ProjectileType.YOSHI_TONGUE: 9,
+            enums.ProjectileType.YOSHI_STAR: 10,
+            enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
+            enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
+            enums.ProjectileType.LUIGI_FIRE: 13
+        }
+    
+    if agent_id == 1:
+        p1 = gamestate.players[1]
+        p2 = gamestate.players[2]
+    else:
+        p1 = gamestate.players[2]
+        p2 = gamestate.players[1]
+        
+    edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
+    
+    if not platfrom:
+        state = np.zeros((869,), dtype=np.float32)
+    else:
+        state = np.zeros((885,), dtype=np.float32)
+        
+    state[0] = p1.position.x / edge_pos
+    state[1] = p1.position.y / edge_pos
+    state[2] = p2.position.x / edge_pos
+    state[3] = p2.position.y / edge_pos
+    state[4] = gamestate.distance / 20
+    state[5] = (edge_pos - abs(p1.position.x)) / edge_pos
+    state[6] = (edge_pos - abs(p2.position.x)) / edge_pos
+    state[7] = 1.0 if p1.facing else -1.0
+    state[8] = 1.0 if p2.facing else -1.0
+    state[9] = 1.0 if (p1.position.x - p2.position.x) * state[7] < 0 else -1.0
+    state[10] = p1.hitstun_frames_left / 10
+    state[11] = p2.hitstun_frames_left / 10
+    state[12] = p1.invulnerability_left / 20
+    state[13] = p2.invulnerability_left / 20
+    state[14] = p1.jumps_left - 1
+    state[15] = p2.jumps_left - 1
+    state[16] = p1.off_stage * 1.0
+    state[17] = p2.off_stage * 1.0
+    state[18] = p1.on_ground * 1.0
+    state[19] = p2.on_ground * 1.0
+    state[20] = (p1.percent - 50) / 50
+    state[21] = (p2.percent - 50) / 50
+    state[22] = (p1.shield_strength - 30) / 30
+    state[23] = (p2.shield_strength - 30) / 30
+    state[24] = p1.speed_air_x_self / 2
+    state[25] = p2.speed_air_x_self / 2
+    state[26] = p1.speed_ground_x_self / 2
+    state[27] = p2.speed_ground_x_self / 2
+    state[28] = p1.speed_x_attack
+    state[29] = p2.speed_x_attack
+    state[30] = p1.speed_y_attack
+    state[31] = p2.speed_y_attack
+    state[32] = p1.speed_y_self
+    state[33] = p2.speed_y_self
+    state[34] = (p1.action_frame - 15) / 15
+    state[35] = (p2.action_frame - 15) / 15
+    
+    state[36] = (p1.ecb.top.y - 12) / 2.5
+    state[37] = (p1.ecb.bottom.y - 2) / 2
+    state[38] = (p1.ecb.left.x - 2.7)
+    state[39] = (p1.ecb.left.y - 7) / 2
+    state[40] = p1.ecb.right.x + 2.8
+    state[41] = (p1.ecb.right.y + 2.8) / 10
+    
+    if p1.action.value < 386:
+        state[41 + p1.action.value] = 1.0
+    if p2.action.value < 386:
+        state[41 + 386 + p2.action.value] = 1.0
+    
+    # if the type is same, then apply only once
+    projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]
+    for i, proj in enumerate(projs):
+        state[41 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
+        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
+        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
+    
+    if platform:
+        p1_on_left = False
+        p2_on_left = False
+        p1_on_right = False
+        p2_on_right = False
+        p1_on_top = False
+        p2_on_top = False
+        left_height, left_left, left_right = melee.left_platform_position(gamestate)
+        right_height, right_left, right_right = melee.right_platform_position(gamestate)
+        top_height, top_left, top_right = melee.top_platform_position(gamestate)
+        p1_on_left = left_left - 1 < p1.position.x < left_right + 1 \
+            and (p1.position.y - left_height) <= 1
+        p2_on_left = left_left - 1 < p2.position.x < left_right + 1 \
+            and (p2.position.y - left_height) <= 1
+        p1_on_right = right_left - 1 < p1.position.x < right_right + 1 \
+            and (p1.position.y - right_height) <= 1
+        p2_on_right = right_left - 1 < p2.position.x < right_right + 1 \
+            and (p2.position.y - right_height) <= 1
 
-def from_action_space(act):
-    def get_action_encoding(self, *args):
-        gamestate = args[0]
-        action = act(self, gamestate)
-        control = self.action_space(action)
-        control(self.controller)
-        return 
-    return get_action_encoding
+        if top_height is not None:
+            p1_on_top = top_left - 1 < p1.position.x < top_right + 1 \
+                and (p1.position.y - top_height) <= 1
+            p2_on_top = top_left - 1 < p2.position.x < top_right + 1 \
+                and (p2.position.y - top_height) <= 1
+
+        state[869] = 1.0 if p1_on_left else 0
+        state[870] = 1.0 if p2_on_left else 0
+        state[871] = 1.0 if p1_on_right else 0
+        state[872] = 1.0 if p2_on_right else 0
+        state[873] = 1.0 if p1_on_top else 0
+        state[874] = 1.0 if p2_on_top else 0
+        state[875] = (abs(p1.position.x) - right_left) / edge_pos
+        state[876] = (abs(p2.position.x) - right_left) / edge_pos
+        state[877] = (abs(p1.position.x) - right_right) / edge_pos
+        state[878] = (abs(p2.position.x) - right_right) / edge_pos
+        state[879] = (p1.position.y - right_height) / 70
+        state[880] = (p2.position.y - right_height) / 70
+        state[881] = (abs(p1.position.x) - top_right) / edge_pos if top_height is not None else 0
+        state[882] = (abs(p2.position.x) - top_right) / edge_pos if top_height is not None else 0
+        state[883] = (p1.position.y - top_height) / top_height if top_height is not None else 0
+        state[884] = (p2.position.y - top_height) / top_height if top_height is not None else 0
+        
+    return state
