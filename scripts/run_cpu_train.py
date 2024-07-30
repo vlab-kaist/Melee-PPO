@@ -8,7 +8,7 @@ import signal
 from tqdm import tqdm
 
 # characters = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
-character = "PIKACHU"
+character = "LINK"
 script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
 save_dir = "./TransformerGRU"
@@ -23,19 +23,27 @@ recent_model = os.path.join(save_dir, "checkpoints", "recent_model.pt")
 
 def run_command(cmd):
     try:
-        result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=60 * 6,
-                check=True
-            )
+        process = subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate(timeout=60 * 6)
+        return_code = process.returncode
+
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, cmd, output=stdout, stderr=stderr)
     except subprocess.CalledProcessError as e:
         print('The command failed with exit code', e.returncode)
         print('Error output:', e.stderr)
     except subprocess.TimeoutExpired as e:
         print('The command timed out and was terminated.')
+        process.kill()
+        stdout, stderr = process.communicate()
+        print('Terminated command output:', stdout)
+        print('Terminated command error:', stderr)
     except Exception as e:
         print('An unexpected error occurred:', e)
     finally:
