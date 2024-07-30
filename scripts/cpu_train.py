@@ -130,7 +130,9 @@ agent_ppo = PPOGRUAgent(models=models_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device, 
-                agent_id = 1)
+                agent_id=1,
+                platform=False if args.stage == "FINAL_DESTINATION" else True
+                )
 
 if args.model_path is not None:
     agent_ppo.load(args.model_path)

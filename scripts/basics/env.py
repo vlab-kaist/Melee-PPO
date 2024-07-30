@@ -144,7 +144,7 @@ class MeleeEnv:
         if self.gamestate.menu_state in [melee.Menu.IN_GAME, melee.Menu.SUDDEN_DEATH]:
             self.gamestate = self.console.step()
         
-        return self.observation_space(self.gamestate)  #return self.observation_space(self.gamestate)
+        return self.observation_space(self.gamestate)
  
     def setup(self, stage):
         # self.observation_space._reset()
@@ -203,7 +203,7 @@ class MeleeEnv:
 # oponent agent is CPU
 class CPUMeleeEnv(gym.Env):
     def __init__(self, config={}):
-        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays= config["save_replay"])
+        self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays=config["save_replay"])
         # with FileLock("thisislock.lock"): self.env.start()
         self.run = False
         self.agent_id = config["agent_id"]
@@ -212,6 +212,11 @@ class CPUMeleeEnv(gym.Env):
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.config = config
+        
+        self.platform = config["stage"] != "FINAL_DESTINATION"
+        if self.platform:
+            self.env.observation_space = PlatformObservationSpace()
+            
 
     def reset(self, *, seed=None, options=None):
         if self.run:
@@ -245,6 +250,10 @@ class StackedCPUMeleeEnv(gym.Env):
         self.stack_size = config["n_stack"]
         self.stacked_obs = None
         self.config = config
+        
+        self.platform = config["stage"] != "FINAL_DESTINATION"
+        if self.platform:
+            self.env.observation_space = PlatformObservationSpace()
 
     def reset(self, *, seed=None, options=None):
         if self.run:
@@ -282,6 +291,9 @@ class MultiMeleeEnv(gym.Env):
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.config = config
+        self.platform = config["stage"] != "FINAL_DESTINATION"
+        if self.platform:
+            self.env.observation_space = PlatformObservationSpace()
         
     def reset(self, *, seed=None, options=None):
         if self.run:
@@ -290,7 +302,7 @@ class MultiMeleeEnv(gym.Env):
             self.env.start()
         self.run = True
         obs, gamestate = self.env.setup(self.config["stage"])
-        return gamestate, {} #gamestate, {}
+        return gamestate, {}
     
     def step(self, actions):
         truncated = False
@@ -313,6 +325,9 @@ class SelfPlayMeleeEnv(gym.Env):
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.config = config
+        self.platform = config["stage"] != "FINAL_DESTINATION"
+        if self.platform:
+            self.env.observation_space = PlatformObservationSpace()
         
         models_ppo = {}
         device = torch.device('cpu')
@@ -325,19 +340,13 @@ class SelfPlayMeleeEnv(gym.Env):
             models_ppo["policy"] = Policy(observation_space, self.action_space, device)
             models_ppo["value"] = Value(observation_space, self.action_space, device)
             
-            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-            cfg_ppo["state_preprocessor"] = RunningStandardScaler
-            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
-            cfg_ppo["value_preprocessor"] = RunningStandardScaler
-            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
-            
             self.op_agent = StackedPPOAgent(models=models_ppo,
-                    cfg=cfg_ppo,
                     observation_space=observation_space,
                     action_space=self.action_space,
                     device=device, 
                     agent_id = 1 if self.agent_id == 2 else 2,
-                    stack_size=16,)
+                    stack_size=16,
+                    platform=self.platform)
             
         elif config["actor"].agent_type == AgentType.GRU:
             low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
@@ -349,16 +358,12 @@ class SelfPlayMeleeEnv(gym.Env):
             models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
                                 num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
             
-            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-            cfg_ppo["value_preprocessor"] = RunningStandardScaler
-            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
-            
             self.op_agent = PPOGRUAgent(models=models_ppo,
-                    cfg=cfg_ppo,
                     observation_space=observation_space,
                     action_space=self.action_space,
                     device=device, 
-                    agent_id = 1 if self.agent_id == 2 else 2)
+                    agent_id = 1 if self.agent_id == 2 else 2,
+                    platform=self.platform)
         
         self.op_agent.load(config["actor"].model_path)
         self.op_agent.set_mode("eval")
@@ -404,6 +409,9 @@ class StackedSelfPlayMeleeEnv(gym.Env):
         self.stack_size = config["n_stack"]
         self.stacked_obs = None
         self.config = config
+        self.platform = config["stage"] != "FINAL_DESTINATION"
+        if self.platform:
+            self.env.observation_space = PlatformObservationSpace()
         
         models_ppo = {}
         device = torch.device('cpu')
@@ -416,19 +424,13 @@ class StackedSelfPlayMeleeEnv(gym.Env):
             models_ppo["policy"] = Policy(observation_space, self.action_space, device)
             models_ppo["value"] = Value(observation_space, self.action_space, device)
             
-            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-            cfg_ppo["state_preprocessor"] = RunningStandardScaler
-            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
-            cfg_ppo["value_preprocessor"] = RunningStandardScaler
-            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
-            
             self.op_agent = StackedPPOAgent(models=models_ppo,
-                    cfg=cfg_ppo,
                     observation_space=observation_space,
                     action_space=self.action_space,
                     device=device, 
                     agent_id =  1 if self.agent_id == 2 else 2,
                     stack_size=16,
+                    platform=self.platform
                     )
             
         elif config["actor"].agent_type == AgentType.GRU:
@@ -441,16 +443,12 @@ class StackedSelfPlayMeleeEnv(gym.Env):
             models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
                                 num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
             
-            cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-            cfg_ppo["value_preprocessor"] = RunningStandardScaler
-            cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
-            
             self.op_agent = PPOGRUAgent(models=models_ppo,
-                    cfg=cfg_ppo,
                     observation_space=observation_space,
                     action_space=self.action_space,
                     device=device, 
-                    agent_id = 1 if self.agent_id == 2 else 2)
+                    agent_id = 1 if self.agent_id == 2 else 2,
+                    platform=self.platform)
         
         self.op_agent.load(config["actor"].model_path)
         self.op_agent.set_mode("eval")

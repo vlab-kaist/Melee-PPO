@@ -282,7 +282,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
         
     edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
     
-    if not platfrom:
+    if not platform:
         state = np.zeros((869,), dtype=np.float32)
     else:
         state = np.zeros((885,), dtype=np.float32)

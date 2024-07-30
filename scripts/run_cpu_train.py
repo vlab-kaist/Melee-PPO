@@ -15,7 +15,7 @@ script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
 save_dir = "./PlatformYOSHI"
 init_timestep = 0
-timesteps = 18000
+timesteps = 1000
 save_freq = timesteps
 model_path = None
 

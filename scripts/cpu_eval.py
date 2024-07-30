@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 
 def make_env(id, cpu_lvl):
-    players = [MyAgent(enums.Character.DOC), CPU(enums.Character.LUIGI, cpu_lvl)]
+    players = [MyAgent(enums.Character.YOSHI), CPU(enums.Character.PIKACHU, cpu_lvl)]
     register(
         id=id,
         entry_point=f'basics.env:{id}',
@@ -45,10 +45,10 @@ def make_env(id, cpu_lvl):
             "iso_path": args.iso,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 869,
-            "n_actions": 29, # 25
+            "n_states": 885, #869,
+            "n_actions": 29,
             "save_replay": True,
-            "stage": enums.Stage.FINAL_DESTINATION,
+            "stage": enums.Stage.BATTLEFIELD, # enums.Stage.FINAL_DESTINATION,
         }},
     )
     return gym.make(id)
@@ -67,10 +67,11 @@ agent_ppo = PPOGRUAgent(models=models_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device, 
-                agent_id = 1)
+                agent_id = 1,
+                platform=True)
 
-model_path = "/home/tgkang/multi-env/skrl-ssbm/NewActionSpace/24-07-13_03-31-26-444904_PPOAgent/checkpoints/agent_15564800.pt"
-#agent_ppo.load(model_path)
+model_path = "/home/tgkang3/recent_model.pt"
+agent_ppo.load(model_path)
 agent_ppo.set_mode("eval")
 agent_ppo.init()
 
@@ -82,3 +83,5 @@ while not done:
         action, _ = agent_ppo.act(state, 1, 0)
     next_state, reward, done, truncated, info = env.step((action, 0))
     state = next_state
+
+env.close()

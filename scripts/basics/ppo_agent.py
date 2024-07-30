@@ -12,7 +12,7 @@ from enum import Enum
     
 class PPOAgent(PPO):
     def __init__(self, agent_id=1, players=None, csv_path=None,
-                 is_selfplay=False, *args, **kwargs):
+                 is_selfplay=False, platform=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_id = agent_id
         self.action = torch.tensor([[0]], device=self.device)
@@ -21,6 +21,7 @@ class PPOAgent(PPO):
         self.gamestate = None
         self.csv_path = csv_path
         self.is_selfplay = is_selfplay
+        self.platform = platform
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -99,7 +100,7 @@ class PPOAgent(PPO):
 
 class StackedPPOAgent(PPO): # 
     def __init__(self, agent_id=1, stack_size=4, players=None, csv_path=None,
-                 is_selfplay=False, *args, **kwargs):
+                 is_selfplay=False, platform=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_id = agent_id
         self.action = torch.tensor([[0]], device=self.device)
@@ -110,6 +111,7 @@ class StackedPPOAgent(PPO): #
         self.players = players
         self.csv_path = csv_path
         self.is_selfplay = is_selfplay
+        self.platform = platform
         
     def act(self, states, timestep: int, timesteps: int):
         # when agent is not training. it use gamestate itself
@@ -194,7 +196,7 @@ class StackedPPOAgent(PPO): #
         
 class PPOGRUAgent(PPO_RNN):
     def __init__(self, agent_id=1, players=None, csv_path=None,
-                 is_selfplay=False, *args, **kwargs):
+                 is_selfplay=False, platform=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_id = agent_id
         self.action = torch.tensor([[0]], device=self.device)
@@ -203,6 +205,7 @@ class PPOGRUAgent(PPO_RNN):
         self.gamestate = None
         self.csv_path = csv_path
         self.is_selfplay = is_selfplay
+        self.platform = platform
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -224,7 +227,7 @@ class PPOGRUAgent(PPO_RNN):
         return self.action, self._current_log_prob
     
     def state_preprocess(self, gamestate):
-        return state_preprocess(gamestate, self.agent_id)
+        return state_preprocess(gamestate, self.agent_id, self.platform)
     
     def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
         super().record_transition(states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps)
@@ -307,7 +310,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
         
     edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
     
-    if not platfrom:
+    if not platform:
         state = np.zeros((869,), dtype=np.float32)
     else:
         state = np.zeros((885,), dtype=np.float32)
