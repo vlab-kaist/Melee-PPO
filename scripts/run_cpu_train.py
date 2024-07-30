@@ -41,9 +41,6 @@ def run_command(cmd):
     except subprocess.TimeoutExpired as e:
         print('The command timed out and was terminated.')
         process.kill()
-        stdout, stderr = process.communicate()
-        print('Terminated command output:', stdout)
-        print('Terminated command error:', stderr)
     except Exception as e:
         print('An unexpected error occurred:', e)
     finally:
