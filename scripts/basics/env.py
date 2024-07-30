@@ -344,12 +344,12 @@ class SelfPlayMeleeEnv(gym.Env):
             high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
             observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
             
-            models_ppo["policy"] = GRUPolicy(observation_space, self.action_space, device)
-            models_ppo["value"] = GRUValue(observation_space, self.action_space, device)
+            models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+            models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
             
             cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-            cfg_ppo["state_preprocessor"] = RunningStandardScaler
-            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
             cfg_ppo["value_preprocessor"] = RunningStandardScaler
             cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
             
@@ -436,12 +436,12 @@ class StackedSelfPlayMeleeEnv(gym.Env):
             high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
             observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
             
-            models_ppo["policy"] = GRUPolicy(observation_space, self.action_space, device)
-            models_ppo["value"] = GRUValue(observation_space, self.action_space, device)
+            models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+            models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
             
             cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-            cfg_ppo["state_preprocessor"] = RunningStandardScaler
-            cfg_ppo["state_preprocessor_kwargs"] = {"size": observation_space, "device": device}
             cfg_ppo["value_preprocessor"] = RunningStandardScaler
             cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
             
