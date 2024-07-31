@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 
 def make_env(id, cpu_lvl):
-    players = [MyAgent(attr(enums.Character.YOSHI)), CPU(enums.Character.PIKACHU, cpu_lvl)]
+    players = [MyAgent(enums.Character.YOSHI), CPU(enums.Character.PIKACHU, cpu_lvl)]
     register(
         id=id,
         entry_point=f'basics.env:{id}',
@@ -118,3 +118,5 @@ for lvl in range(1, 10):
                 loses[lvl - 1] += 1
         except Exception as e:
             print(f"error ouccured: {e}")
+print("wins: ", wins)
+print("loses: ", loses)
