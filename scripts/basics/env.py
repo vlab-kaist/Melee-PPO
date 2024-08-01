@@ -212,8 +212,7 @@ class CPUMeleeEnv(gym.Env):
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.config = config
-        
-        self.platform = config["stage"] != "FINAL_DESTINATION"
+        self.platform = config["stage"] != getattr(enums.Stage, "FINAL_DESTINATION")
         if self.platform:
             self.env.observation_space = PlatformObservationSpace()
             
@@ -251,7 +250,7 @@ class StackedCPUMeleeEnv(gym.Env):
         self.stacked_obs = None
         self.config = config
         
-        self.platform = config["stage"] != "FINAL_DESTINATION"
+        self.platform = config["stage"] != getattr(enums.Stage, "FINAL_DESTINATION")
         if self.platform:
             self.env.observation_space = PlatformObservationSpace()
 
@@ -291,7 +290,7 @@ class MultiMeleeEnv(gym.Env):
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.config = config
-        self.platform = config["stage"] != "FINAL_DESTINATION"
+        self.platform = config["stage"] != getattr(enums.Stage, "FINAL_DESTINATION")
         if self.platform:
             self.env.observation_space = PlatformObservationSpace()
         
@@ -325,7 +324,7 @@ class SelfPlayMeleeEnv(gym.Env):
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.config = config
-        self.platform = config["stage"] != "FINAL_DESTINATION"
+        self.platform = config["stage"] != getattr(enums.Stage, "FINAL_DESTINATION")
         if self.platform:
             self.env.observation_space = PlatformObservationSpace()
         
@@ -409,7 +408,7 @@ class StackedSelfPlayMeleeEnv(gym.Env):
         self.stack_size = config["n_stack"]
         self.stacked_obs = None
         self.config = config
-        self.platform = config["stage"] != "FINAL_DESTINATION"
+        self.platform = config["stage"] != getattr(enums.Stage, "FINAL_DESTINATION")
         if self.platform:
             self.env.observation_space = PlatformObservationSpace()
         
