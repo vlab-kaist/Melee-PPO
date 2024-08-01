@@ -33,11 +33,23 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
+parser.add_argument(
+    "--model_path", default=None, type=str, help="Path to the saved model to be loaded for further training"
+)
+parser.add_argument(
+    "--char", default=None, type=str, help="Character to train"
+)
+parser.add_argument(
+    "--opp_char", default="PIKACHU", type=str, help="Character to train"
+)
+parser.add_argument(
+    "--stage", default="FINAL_DESTINATION", type=str, help="stages to play"
+)
 args = parser.parse_args()
 
-
 def make_env(id, cpu_lvl):
-    players = [MyAgent(enums.Character.YOSHI), CPU(enums.Character.PIKACHU, cpu_lvl)]
+    players = [MyAgent(getattr(enums.Character, args.char)), 
+               CPU(getattr(enums.Character, args.opp_char), cpu_lvl)]
     register(
         id=id,
         entry_point=f'basics.env:{id}',
@@ -45,10 +57,10 @@ def make_env(id, cpu_lvl):
             "iso_path": args.iso,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 885, #869
-            "n_actions": 29,
-            "save_replay": True,
-            "stage": stage,
+            "n_states": 869 if args.stage == "FINAL_DESTINATION" else 885,
+            "n_actions": 29, #28,
+            "save_replay": False, #True 
+            "stage": getattr(enums.Stage, args.stage),
         }},
     )
     return gym.make(id)
@@ -68,7 +80,7 @@ def match(model_path, lvl):
                     action_space=env.action_space,
                     device=device, 
                     agent_id = 1,
-                    platform=True)
+                    platform=False if args.stage == "FINAL_DESTINATION" else True)
 
     agent_ppo.load(model_path)
     agent_ppo.set_mode("eval")
@@ -86,15 +98,29 @@ def match(model_path, lvl):
     elif state.player[1].stock < state.player[2].stock:
         return -1
 
-PARALLEL_NUM = 5
-model_path = "/home/tgkang3/Melee-PPO/scripts/PlatformYOSHI/checkpoints/recent_model.pt"
+def kill_dolphin():
+    current_user = os.getlogin()
+
+    for proc in psutil.process_iter(['pid', 'username', 'name']):
+        try:
+            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
+                parent_pid = proc.pid
+                parent = psutil.Process(parent_pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+
+PARALLEL_NUM = 10
 wins = [0] * 9
 loses = [0] * 9
 
+kill_dolphin()
 for lvl in range(1, 10):
     futures = []
     for _ in range(PARALLEL_NUM):
-        futures.append((match, model_path, lvl))
+        futures.append((match, args.model_path, lvl))
     with ProcessPoolExecutor(max_workers=32) as executor:
         futures = [executor.submit(*x) for x in futures]
     for future in futures:
@@ -105,18 +131,6 @@ for lvl in range(1, 10):
                 loses[lvl - 1] += 1
         except Exception as e:
             print(f"error ouccured: {e}")
-    futures = []
-    for _ in range(PARALLEL_NUM):
-        futures.append((match, model_path, lvl))
-    with ProcessPoolExecutor(max_workers=32) as executor:
-        futures = [executor.submit(*x) for x in futures]
-    for future in futures:
-        try:
-            if future.result() == 1:        
-                wins[lvl - 1] += 1
-            elif future.result() == -1:
-                loses[lvl - 1] += 1
-        except Exception as e:
-            print(f"error ouccured: {e}")
-print("wins: ", wins)
-print("loses: ", loses)
+    kill_dolphin()
+    print("wins: ", wins)
+    print("loses: ", loses)
