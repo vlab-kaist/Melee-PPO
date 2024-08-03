@@ -182,7 +182,7 @@ class PPOGRUAgent(PPO_RNN):
                 if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
                     self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
                 elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone: # cyclone if possible
-                    self.macro_queue = [30, 0] * 20 if is_left else [29, 0] * 20
+                    self.macro_queue = [11, 0] * 20
                     self.macro_queue += [2, 2, 2] if is_left else [1, 1, 1] 
                     self.cyclone = True
                 elif abs(ai.position.x) - edge_pos < 15: # up B
