@@ -91,7 +91,7 @@ env = gym.vector.AsyncVectorEnv([
 env = wrap_env(env, wrapper="gymnasium")
 device = env.device
 # Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
-memory = RandomMemory(memory_size=8192, num_envs=env.num_envs, device=device)
+memory = RandomMemory(memory_size=1024, num_envs=env.num_envs, device=device)
 
 models_ppo = {}
 models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=env.num_envs,
