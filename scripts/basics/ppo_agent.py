@@ -37,7 +37,7 @@ class PPOGRUAgent(PPO_RNN):
             states = self.state_preprocess(states)
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         ai = self.gamestate.players[self.agent_id]
-        if ai.on_ground:
+        if ai.on_ground and self.action == 11: # cyclone is charged when down b occurs on ground
             self.cyclone = False
         if ai.on_ground or not ai.off_stage:
             self.side_b = False
@@ -165,7 +165,7 @@ class PPOGRUAgent(PPO_RNN):
                     self.macro_queue = [19, 19, 19] # need to change
     
     def luigi_recovery(self):
-        # TODO: apply cyclon
+        # TODO: make more stable when left B fires, and move side using down B
         self.macro_mode = True
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
@@ -182,8 +182,7 @@ class PPOGRUAgent(PPO_RNN):
                 if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
                     self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
                 elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone: # cyclone if possible
-                    self.macro_queue = [11, 0] * 20
-                    self.macro_queue += [2, 2, 2] if is_left else [1, 1, 1] 
+                    self.macro_queue = [11, 0] * 25
                     self.cyclone = True
                 elif abs(ai.position.x) - edge_pos < 15: # up B
                     self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
