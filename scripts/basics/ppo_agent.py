@@ -28,6 +28,7 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_queue = []
         self.macro_idx = 0
         self.side_b = False # for mario
+        self.cyclone = False # for mario and luigi
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -36,6 +37,8 @@ class PPOGRUAgent(PPO_RNN):
             states = self.state_preprocess(states)
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         ai = self.gamestate.players[self.agent_id]
+        if ai.on_ground:
+            self.cyclone = False
         if ai.on_ground or not ai.off_stage:
             self.side_b = False
         if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
@@ -45,6 +48,14 @@ class PPOGRUAgent(PPO_RNN):
         elif (not self.macro_mode) and ai.off_stage:
             if ai.character in [Character.MARIO, Character.DOC]:
                 self.mario_recovery()
+            elif ai.character == Character.LINK:
+                self.link_recovery()
+            elif ai.character == Character.PIKACHU:
+                self.pikachu_recovery()
+            elif ai.character == Character.YOSHI:
+                self.yoshi_recovery()
+            else:
+                self.luigi_recovery()
         if self.macro_mode:
             self.action = self.macro_queue[self.macro_idx]
             self.macro_idx += 1
@@ -52,8 +63,6 @@ class PPOGRUAgent(PPO_RNN):
                 self.macro_idx = 0
                 self.macro_mode = False
                 self.macro_queue = []
-            if self.side_b:
-                print(self.action)
             return self.action, self._current_log_prob
         
         if self.action_cnt >= 3:   
@@ -78,6 +87,7 @@ class PPOGRUAgent(PPO_RNN):
         self.gamestate = infos["gamestate"]
     
     def mario_recovery(self):
+        # TODO: check avaiable recoverable distance and use down-B
         self.macro_mode = True
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
@@ -91,13 +101,94 @@ class PPOGRUAgent(PPO_RNN):
             else: 
                 if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
                     self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-                elif abs(ai.position.x) - edge_pos > 40 and not self.side_b:
-                    self.macro_queue = [10, 10, 10] if is_left else [9, 9, 9]
+                elif abs(ai.position.x) - edge_pos > 40 and not self.side_b: # 40 => more larger ex.50?
+                    self.macro_queue = [10, 10, 10] if is_left else [9, 9, 9] # apply side B
                     self.macro_queue += [2, 2] * 20 if is_left else [1, 1] * 20 # this is important
                     self.side_b = True
                 else: # up B
                     self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
     
+    def link_recovery(self):
+        # TODO: ues z (lope) for catching side edge or side / use bomb
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        is_left = ai.position.x < 0
+        if ai.position.y > 0: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        else:
+            if ai.jumps_left > 0: # jump
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            else: 
+                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                else: # up B
+                    self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
+    
+    def pikachu_recovery(self):
+        # TODO: need to use side B for reducing distance
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        is_left = ai.position.x < 0
+        if ai.position.y > 0: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        else:
+            if ai.jumps_left > 0: # jump
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            else: 
+                if ai.position.y > -50 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                else: # up B
+                    self.macro_queue = [12, 12, 12, 12]
+                    self.macro_queue += [0] * 15 #20
+                    self.macro_queue += [24, 24, 24] * 2 if is_left else [23, 23, 23] * 2
+    
+    def yoshi_recovery(self):
+        # TODO: need to use side B for reducing distance
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        is_left = ai.position.x < 0
+        if ai.position.y > 20: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        else:
+            if ai.jumps_left > 0: # jump
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            else: 
+                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                else: # L
+                    self.macro_queue = [19, 19, 19] # need to change
+    
+    def luigi_recovery(self):
+        # TODO: apply cyclon
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        is_left = ai.position.x < 0
+        if ai.position.y > 30:
+            self.macro_queue = [10, 10, 10, 0] if is_left else [9, 9, 9, 0]
+        elif ai.position.y > 0: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        else:
+            if ai.jumps_left > 0: # jump
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            else: 
+                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone: # cyclone if possible
+                    self.macro_queue = [30, 0] * 20 if is_left else [29, 0] * 20
+                    self.macro_queue += [2, 2, 2] if is_left else [1, 1, 1] 
+                    self.cyclone = True
+                elif abs(ai.position.x) - edge_pos < 15: # up B
+                    self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
+                else:
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
 
 def state_preprocess(gamestate, agent_id, platform=False):
     proj_mapping = {
