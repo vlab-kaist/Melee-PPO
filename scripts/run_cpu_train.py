@@ -9,13 +9,13 @@ from tqdm import tqdm
 
 # characters = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
 # stages = ["BATTLEFIELD", "FINAL_DESTINATION", "POKEMON_STADIUM"]
-character = "YOSHI"
-stage = "BATTLEFIELD"
+character = "PIKACHU"
+stage = "FINAL_DESTINATION"
 script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
-save_dir = "./PlatformYOSHI"
+save_dir = "./RecoverAgainstCPU"
 init_timestep = 0
-timesteps = 1000
+timesteps = 18000
 save_freq = timesteps
 model_path = None
 

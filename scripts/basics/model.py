@@ -120,16 +120,17 @@ class TransformerGRU(nn.Module):
                     param.contiguous()
 
     def forward(self, x, hidden_states=None):
-        if hidden_states is None:
-            hidden_states = [None] * len(self.layers)
-        
-        x = self.pre_embed(x)
-        for i, (gru_block, ffn_block, norm1, norm2) in enumerate(self.layers):
-            y, hidden_states[i] = gru_block(norm1(x), hidden_states[i])
-            x = x + y
-            x = x + ffn_block(norm2(x))
-        x = self.final_norm(x)
-        return self.output_layer(x), hidden_states
+        with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
+            if hidden_states is None:
+                hidden_states = [None] * len(self.layers)
+            
+            x = self.pre_embed(x)
+            for i, (gru_block, ffn_block, norm1, norm2) in enumerate(self.layers):
+                y, hidden_states[i] = gru_block(norm1(x), hidden_states[i])
+                x = x + y
+                x = x + ffn_block(norm2(x))
+            x = self.final_norm(x)
+            return self.output_layer(x).float(), hidden_states
     
 class GRUPolicy(CategoricalMixin, Model):
     def __init__(self, observation_space, action_space, device, unnormalized_log_prob=True,

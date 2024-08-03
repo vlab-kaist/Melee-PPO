@@ -24,7 +24,7 @@ from melee import enums
 from basics.env import *
 from basics.basic import *
 from basics.util import *
-from basics.ppo_agent import PPOAgent, PPOGRUAgent
+from basics.ppo_agent import PPOGRUAgent
 from basics.model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
@@ -68,8 +68,8 @@ def make_env(id, cpu_lvl):
             "iso_path": iso_path,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 869 if args.stage == "FINAL_DESTINATION" else 885,
-            "n_actions": 29, #28,
+            "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
+            "n_actions": 30, #28,
             "save_replay": False,
             "stage": getattr(enums.Stage, args.stage),
         }},
@@ -100,7 +100,7 @@ models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, 
                                 num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) #Value(env.observation_space, env.action_space, device)
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-cfg_ppo["rollouts"] = 8192  # memory_size
+cfg_ppo["rollouts"] = 1024  # memory_size
 cfg_ppo["learning_epochs"] = 10
 cfg_ppo["mini_batches"] = 8
 cfg_ppo["discount_factor"] = 0.99
@@ -112,7 +112,7 @@ cfg_ppo["grad_norm_clip"] = 1.0
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False
-cfg_ppo["entropy_loss_scale"] = 0.02  # Increase entropy loss scale for more exploration
+cfg_ppo["entropy_loss_scale"] = 0.01
 cfg_ppo["value_loss_scale"] = 0.5
 cfg_ppo["kl_threshold"] = 0
 #cfg_ppo["state_preprocessor"] = RunningStandardScaler
@@ -120,7 +120,7 @@ cfg_ppo["kl_threshold"] = 0
 cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints 
-cfg_ppo["experiment"]["write_interval"] = 8192
+cfg_ppo["experiment"]["write_interval"] = 1024
 cfg_ppo["experiment"]["checkpoint_interval"] = args.save_freq
 #cfg_ppo["experiment"]["directory"] = args.exp_name
 

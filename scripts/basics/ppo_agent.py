@@ -36,35 +36,35 @@ class PPOGRUAgent(PPO_RNN):
             self.gamestate = states
             states = self.state_preprocess(states)
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
-        ai = self.gamestate.players[self.agent_id]
-        if ai.on_ground and self.action == 11: # cyclone is charged when down b occurs on ground
-            self.cyclone = False
-        if ai.on_ground or not ai.off_stage:
-            self.side_b = False
-        if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
-            self.macro_mode = False
-            self.macro_queue = []
-            self.macro_idx = 0
-        elif (not self.macro_mode) and ai.off_stage:
-            if ai.character in [Character.MARIO, Character.DOC]:
-                self.mario_recovery()
-            elif ai.character == Character.LINK:
-                self.link_recovery()
-            elif ai.character == Character.PIKACHU:
-                self.pikachu_recovery()
-            elif ai.character == Character.YOSHI:
-                self.yoshi_recovery()
-            else:
-                self.luigi_recovery()
-        if self.macro_mode:
-            self.action = self.macro_queue[self.macro_idx]
-            self.macro_idx += 1
-            if self.macro_idx >= len(self.macro_queue):
-                self.macro_idx = 0
+        if isinstance(self.gamestate, melee.gamestate.GameState):
+            ai = self.gamestate.players[self.agent_id]
+            if ai.on_ground and self.action == 11: # cyclone is charged when down b occurs on ground
+                self.cyclone = False
+            if ai.on_ground or not ai.off_stage:
+                self.side_b = False
+            if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
                 self.macro_mode = False
                 self.macro_queue = []
-            return self.action, self._current_log_prob
-        
+                self.macro_idx = 0
+            elif (not self.macro_mode) and ai.off_stage:
+                if ai.character in [Character.MARIO, Character.DOC]:
+                    self.mario_recovery()
+                elif ai.character == Character.LINK:
+                    self.link_recovery()
+                elif ai.character == Character.PIKACHU:
+                    self.pikachu_recovery()
+                elif ai.character == Character.YOSHI:
+                    self.yoshi_recovery()
+                else:
+                    self.luigi_recovery()
+            if self.macro_mode:
+                self.action = self.macro_queue[self.macro_idx]
+                self.macro_idx += 1
+                if self.macro_idx >= len(self.macro_queue):
+                    self.macro_idx = 0
+                    self.macro_mode = False
+                    self.macro_queue = []
+                return self.action, self._current_log_prob
         if self.action_cnt >= 3:   
             rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
             actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
@@ -217,9 +217,9 @@ def state_preprocess(gamestate, agent_id, platform=False):
     edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
     
     if not platform:
-        state = np.zeros((869,), dtype=np.float32)
+        state = np.zeros((864,), dtype=np.float32)
     else:
-        state = np.zeros((885,), dtype=np.float32)
+        state = np.zeros((880,), dtype=np.float32)
         
     state[0] = p1.position.x / edge_pos
     state[1] = p1.position.y / edge_pos
@@ -258,25 +258,25 @@ def state_preprocess(gamestate, agent_id, platform=False):
     state[34] = (p1.action_frame - 15) / 15
     state[35] = (p2.action_frame - 15) / 15
     
-    state[36] = (p1.ecb.top.y - 12) / 2.5
-    state[37] = (p1.ecb.bottom.y - 2) / 2
-    state[38] = (p1.ecb.left.x - 2.7)
-    state[39] = (p1.ecb.left.y - 7) / 2
-    state[40] = p1.ecb.right.x + 2.8
-    state[41] = (p1.ecb.right.y + 2.8) / 10
+    # state[36] = (p1.ecb.top.y - 12) / 2.5
+    # state[37] = (p1.ecb.bottom.y - 2) / 2
+    # state[38] = (p1.ecb.left.x - 2.7)
+    # state[39] = (p1.ecb.left.y - 7) / 2
+    # state[40] = p1.ecb.right.x + 2.8
+    # state[41] = (p1.ecb.right.y + 2.8) / 10
     
     if p1.action.value < 386:
-        state[41 + p1.action.value] = 1.0
+        state[36 + p1.action.value] = 1.0
     if p2.action.value < 386:
-        state[41 + 386 + p2.action.value] = 1.0
+        state[36 + 386 + p2.action.value - 6] = 1.0
     
     # if the type is same, then apply only once
     projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]
     for i, proj in enumerate(projs):
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
     
     if platform:
         p1_on_left = False
@@ -303,21 +303,21 @@ def state_preprocess(gamestate, agent_id, platform=False):
             p2_on_top = top_left - 1 < p2.position.x < top_right + 1 \
                 and (p2.position.y - top_height) <= 1
 
-        state[869] = 1.0 if p1_on_left else 0
-        state[870] = 1.0 if p2_on_left else 0
-        state[871] = 1.0 if p1_on_right else 0
-        state[872] = 1.0 if p2_on_right else 0
-        state[873] = 1.0 if p1_on_top else 0
-        state[874] = 1.0 if p2_on_top else 0
-        state[875] = (abs(p1.position.x) - right_left) / edge_pos
-        state[876] = (abs(p2.position.x) - right_left) / edge_pos
-        state[877] = (abs(p1.position.x) - right_right) / edge_pos
-        state[878] = (abs(p2.position.x) - right_right) / edge_pos
-        state[879] = (p1.position.y - right_height) / 70
-        state[880] = (p2.position.y - right_height) / 70
-        state[881] = (abs(p1.position.x) - top_right) / edge_pos if top_height is not None else 0
-        state[882] = (abs(p2.position.x) - top_right) / edge_pos if top_height is not None else 0
-        state[883] = (p1.position.y - top_height) / top_height if top_height is not None else 0
-        state[884] = (p2.position.y - top_height) / top_height if top_height is not None else 0
+        state[864] = 1.0 if p1_on_left else 0
+        state[865] = 1.0 if p2_on_left else 0
+        state[866] = 1.0 if p1_on_right else 0
+        state[867] = 1.0 if p2_on_right else 0
+        state[868] = 1.0 if p1_on_top else 0
+        state[869] = 1.0 if p2_on_top else 0
+        state[870] = (abs(p1.position.x) - right_left) / edge_pos
+        state[871] = (abs(p2.position.x) - right_left) / edge_pos
+        state[872] = (abs(p1.position.x) - right_right) / edge_pos
+        state[873] = (abs(p2.position.x) - right_right) / edge_pos
+        state[874] = (p1.position.y - right_height) / 70
+        state[875] = (p2.position.y - right_height) / 70
+        state[876] = (abs(p1.position.x) - top_right) / edge_pos if top_height is not None else 0
+        state[877] = (abs(p2.position.x) - top_right) / edge_pos if top_height is not None else 0
+        state[878] = (p1.position.y - top_height) / top_height if top_height is not None else 0
+        state[879] = (p2.position.y - top_height) / top_height if top_height is not None else 0
         
     return state

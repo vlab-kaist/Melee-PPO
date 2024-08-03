@@ -25,7 +25,7 @@ from melee import enums
 from basics.env import *
 from basics.basic import *
 from basics.util import *
-from basics.ppo_agent import PPOAgent, PPOGRUAgent
+from basics.ppo_agent import PPOGRUAgent
 from basics.model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
@@ -35,9 +35,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-
 def make_env(id, cpu_lvl):
-    players = [MyAgent(enums.Character.YOSHI), CPU(enums.Character.PIKACHU, cpu_lvl)]
+    players = [MyAgent(enums.Character.LUIGI), CPU(enums.Character.GANONDORF, cpu_lvl)]
     register(
         id=id,
         entry_point=f'basics.env:{id}',
@@ -45,18 +44,32 @@ def make_env(id, cpu_lvl):
             "iso_path": args.iso,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 885, #869,
-            "n_actions": 29,
+            "n_states": 864, #880,
+            "n_actions": 30,
             "save_replay": True,
-            "stage": enums.Stage.BATTLEFIELD, # enums.Stage.FINAL_DESTINATION,
+            "stage": enums.Stage.FINAL_DESTINATION, #enums.Stage.BATTLEFIELD,
         }},
     )
     return gym.make(id)
     
+def kill_dolphin():
+    current_user = os.getlogin()
+
+    for proc in psutil.process_iter(['pid', 'username', 'name']):
+        try:
+            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
+                parent_pid = proc.pid
+                parent = psutil.Process(parent_pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+
+kill_dolphin()
 env = make_env(id="MultiMeleeEnv", cpu_lvl=9)
 device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 
-models_ppo = {}
 models_ppo = {}
 models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
                                 num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
@@ -68,9 +81,9 @@ agent_ppo = PPOGRUAgent(models=models_ppo,
                 action_space=env.action_space,
                 device=device, 
                 agent_id = 1,
-                platform=True)
+                platform=False)
 
-model_path = "/home/tgkang3/recent_model.pt"
+model_path = ""
 agent_ppo.load(model_path)
 agent_ppo.set_mode("eval")
 agent_ppo.init()
@@ -80,7 +93,7 @@ done = False
 
 while not done:
     with torch.no_grad():
-        action, _ = agent_ppo.act(state, 1, 0)
+        action, _ = agent_ppo.act(state, 1, 0) 
     next_state, reward, done, truncated, info = env.step((action, 0))
     state = next_state
 

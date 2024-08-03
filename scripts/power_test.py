@@ -20,13 +20,14 @@ from skrl.envs.torch import wrap_env
 
 import sys
 import os
+import csv
 
 import melee
 from melee import enums
 from basics.env import *
 from basics.basic import *
 from basics.util import *
-from basics.ppo_agent import PPOAgent, PPOGRUAgent
+from basics.ppo_agent import PPOGRUAgent
 from basics.model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
@@ -134,3 +135,13 @@ for lvl in range(1, 10):
     kill_dolphin()
     print("wins: ", wins)
     print("loses: ", loses)
+
+directory_path = args.model_path[:-3]
+if not os.path.exists(directory_path):
+    os.makedirs(directory_path)
+output_file = directory_path + f"/{args.opp_char}.csv"
+with open(output_file, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(["Level", "Wins", "Loses"])
+    for level in range(1, 10):
+        writer.writerow([level, wins[level - 1], loses[level - 1]])

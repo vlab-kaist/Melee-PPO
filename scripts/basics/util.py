@@ -183,6 +183,13 @@ class PlatformObservationSpace:
 class ActionSpace:
     def __init__(self):
         mid = np.sqrt(2) / 2
+        # melee.enums.Button.BUTTON_A, #1
+        # melee.enums.Button.BUTTON_B, #2
+        # melee.enums.Button.BUTTON_Z, #3
+        # melee.enums.Button.BUTTON_L, #4
+        # melee.enums.Button.BUTTON_Y, #5
+        # melee.enums.Button.BUTTON_C #6
+        #TODO: need to apply yp z [0, 1, 3]
         self.action_space = np.array(
             [
                 [0, 0, 0], #0
@@ -203,7 +210,7 @@ class ActionSpace:
                 [0, 0, 3],  # 15
                 [-1, 0, 3],  # 16
                 [1, 0, 3],  # 17
-                [0, -1, 3],  # 18
+                [0, -1, 3],  # 18 need to add [0, 1, 3] also
                 [0, 0, 4],  # 19
                 [-1, 0, 5],  # 20
                 [1, 0, 5],  # 21
@@ -214,6 +221,7 @@ class ActionSpace:
                 [-1, 0, 6],  # 26
                 [0, 1, 6],  # 27
                 [0, -1, 6],  # 28
+                [0, 1, 3], # 29
             ],
             dtype=np.float32,
         )
@@ -223,9 +231,6 @@ class ActionSpace:
         return np.random.choice(self.size)
 
     def __call__(self, action):
-        if action > self.size - 1:
-            exit("Error: invalid action!")
-
         return ControlState(self.action_space[action])
 
 class ControlState: # need to change
@@ -245,7 +250,8 @@ class ControlState: # need to change
         controller.release_all()      
         if self.state[2]:
             if self.state[2] == 4.0:
-                controller.press_shoulder(melee.enums.Button.BUTTON_L, 1.0)
+                #controller.press_shoulder(melee.enums.Button.BUTTON_L, 1.0)
+                controller.press_button(melee.Button.BUTTON_L)
             elif self.state[2] == 6.0:
                 controller.tilt_analog_unit(melee.enums.Button.BUTTON_C, 
                                     self.state[0], self.state[1])
@@ -283,9 +289,9 @@ def state_preprocess(gamestate, agent_id, platform=False):
     edge_pos = melee.stages.EDGE_GROUND_POSITION[gamestate.stage]
     
     if not platform:
-        state = np.zeros((869,), dtype=np.float32)
+        state = np.zeros((864,), dtype=np.float32)
     else:
-        state = np.zeros((885,), dtype=np.float32)
+        state = np.zeros((880,), dtype=np.float32)
         
     state[0] = p1.position.x / edge_pos
     state[1] = p1.position.y / edge_pos
@@ -324,25 +330,25 @@ def state_preprocess(gamestate, agent_id, platform=False):
     state[34] = (p1.action_frame - 15) / 15
     state[35] = (p2.action_frame - 15) / 15
     
-    state[36] = (p1.ecb.top.y - 12) / 2.5
-    state[37] = (p1.ecb.bottom.y - 2) / 2
-    state[38] = (p1.ecb.left.x - 2.7)
-    state[39] = (p1.ecb.left.y - 7) / 2
-    state[40] = p1.ecb.right.x + 2.8
-    state[41] = (p1.ecb.right.y + 2.8) / 10
+    # state[36] = (p1.ecb.top.y - 12) / 2.5
+    # state[37] = (p1.ecb.bottom.y - 2) / 2
+    # state[38] = (p1.ecb.left.x - 2.7)
+    # state[39] = (p1.ecb.left.y - 7) / 2
+    # state[40] = p1.ecb.right.x + 2.8
+    # state[41] = (p1.ecb.right.y + 2.8) / 10
     
     if p1.action.value < 386:
-        state[41 + p1.action.value] = 1.0
+        state[36 + p1.action.value] = 1.0
     if p2.action.value < 386:
-        state[41 + 386 + p2.action.value] = 1.0
+        state[36 + 386 + p2.action.value - 6] = 1.0
     
     # if the type is same, then apply only once
     projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]
     for i, proj in enumerate(projs):
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
-        state[41 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 2] = proj.speed.x / 2
+        state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 3] = proj.speed.y / 2
     
     if platform:
         p1_on_left = False
@@ -369,21 +375,21 @@ def state_preprocess(gamestate, agent_id, platform=False):
             p2_on_top = top_left - 1 < p2.position.x < top_right + 1 \
                 and (p2.position.y - top_height) <= 1
 
-        state[869] = 1.0 if p1_on_left else 0
-        state[870] = 1.0 if p2_on_left else 0
-        state[871] = 1.0 if p1_on_right else 0
-        state[872] = 1.0 if p2_on_right else 0
-        state[873] = 1.0 if p1_on_top else 0
-        state[874] = 1.0 if p2_on_top else 0
-        state[875] = (abs(p1.position.x) - right_left) / edge_pos
-        state[876] = (abs(p2.position.x) - right_left) / edge_pos
-        state[877] = (abs(p1.position.x) - right_right) / edge_pos
-        state[878] = (abs(p2.position.x) - right_right) / edge_pos
-        state[879] = (p1.position.y - right_height) / 70
-        state[880] = (p2.position.y - right_height) / 70
-        state[881] = (abs(p1.position.x) - top_right) / edge_pos if top_height is not None else 0
-        state[882] = (abs(p2.position.x) - top_right) / edge_pos if top_height is not None else 0
-        state[883] = (p1.position.y - top_height) / top_height if top_height is not None else 0
-        state[884] = (p2.position.y - top_height) / top_height if top_height is not None else 0
+        state[864] = 1.0 if p1_on_left else 0
+        state[865] = 1.0 if p2_on_left else 0
+        state[866] = 1.0 if p1_on_right else 0
+        state[867] = 1.0 if p2_on_right else 0
+        state[868] = 1.0 if p1_on_top else 0
+        state[869] = 1.0 if p2_on_top else 0
+        state[870] = (abs(p1.position.x) - right_left) / edge_pos
+        state[871] = (abs(p2.position.x) - right_left) / edge_pos
+        state[872] = (abs(p1.position.x) - right_right) / edge_pos
+        state[873] = (abs(p2.position.x) - right_right) / edge_pos
+        state[874] = (p1.position.y - right_height) / 70
+        state[875] = (p2.position.y - right_height) / 70
+        state[876] = (abs(p1.position.x) - top_right) / edge_pos if top_height is not None else 0
+        state[877] = (abs(p2.position.x) - top_right) / edge_pos if top_height is not None else 0
+        state[878] = (p1.position.y - top_height) / top_height if top_height is not None else 0
+        state[879] = (p2.position.y - top_height) / top_height if top_height is not None else 0
         
     return state

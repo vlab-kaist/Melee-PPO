@@ -80,7 +80,8 @@ class MeleeEnv:
             gfx_backend="Null",
             setup_gecko_codes=True,
             disable_audio=True,
-            save_replays=self.save_replays
+            save_replays=self.save_replays,
+            overclock=0.2
         )
 
         # print(self.console.dolphin_home_path)  # add to logging later
