@@ -7,7 +7,7 @@ from skrl.agents.torch.ppo import PPO, PPO_RNN, PPO_DEFAULT_CONFIG
 
 import melee
 from melee import enums
-from melee.enums import Action
+from melee.enums import Action, Character, Button
 import numpy as np
 from enum import Enum       
         
@@ -27,6 +27,7 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_mode = False
         self.macro_queue = []
         self.macro_idx = 0
+        self.side_b = False # for mario
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -35,37 +36,25 @@ class PPOGRUAgent(PPO_RNN):
             states = self.state_preprocess(states)
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         ai = self.gamestate.players[self.agent_id]
-        
-        if (not self.macro_mode) and ai.off_stage:
-            edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
-            self.macro_mode = True
+        if ai.on_ground or not ai.off_stage:
+            self.side_b = False
+        if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
+            self.macro_mode = False
+            self.macro_queue = []
             self.macro_idx = 0
-            is_left = ai.x < 0
-            if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
-        Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
-                self.macro_queue = [19, 19, 19] # use L key
-            elif ai.position.y > 0: # just move -> consider side B only once
-                self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-            else:
-                if ai.jumps_left > 0: # jump
-                    self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
-                else: 
-                    if ai.position.y > -30 and abs(ai.position.x) - edge_pos > 0: # just move
-                        self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-                    else: # up B
-                        self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
-        if self.macro_mode and ai.off_stage:
+        elif (not self.macro_mode) and ai.off_stage:
+            if ai.character in [Character.MARIO, Character.DOC]:
+                self.mario_recovery()
+        if self.macro_mode:
             self.action = self.macro_queue[self.macro_idx]
             self.macro_idx += 1
             if self.macro_idx >= len(self.macro_queue):
                 self.macro_idx = 0
                 self.macro_mode = False
                 self.macro_queue = []
+            if self.side_b:
+                print(self.action)
             return self.action, self._current_log_prob
-        else:
-            self.macro_mode = False
-            self.macro_idx = 0
-            self.macro_queue = []
         
         if self.action_cnt >= 3:   
             rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
@@ -87,6 +76,27 @@ class PPOGRUAgent(PPO_RNN):
     def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
         super().record_transition(states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps)
         self.gamestate = infos["gamestate"]
+    
+    def mario_recovery(self):
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        is_left = ai.position.x < 0
+        if ai.position.y > 0: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        else:
+            if ai.jumps_left > 0: # jump
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            else: 
+                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                elif abs(ai.position.x) - edge_pos > 40 and not self.side_b:
+                    self.macro_queue = [10, 10, 10] if is_left else [9, 9, 9]
+                    self.macro_queue += [2, 2] * 20 if is_left else [1, 1] * 20 # this is important
+                    self.side_b = True
+                else: # up B
+                    self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
     
 
 def state_preprocess(gamestate, agent_id, platform=False):
