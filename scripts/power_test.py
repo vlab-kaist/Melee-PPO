@@ -35,113 +35,143 @@ parser.add_argument(
     "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 parser.add_argument(
-    "--model_path", default=None, type=str, help="Path to the saved model to be loaded for further training"
+    "--char", default=None, type=str, help="my character"
 )
 parser.add_argument(
-    "--char", default=None, type=str, help="Character to train"
+    "--model_path", default=None, type=str, help="model for evaluate"
 )
 parser.add_argument(
-    "--opp_char", default="PIKACHU", type=str, help="Character to train"
+    "--op_char", default="LUIGI", type=str, help="opponent character"
+)
+parser.add_argument(
+    "--op_model_path", default=None, type=str, help="opponent model path"
 )
 parser.add_argument(
     "--stage", default="FINAL_DESTINATION", type=str, help="stages to play"
 )
 args = parser.parse_args()
-
-def make_env(id, cpu_lvl):
-    players = [MyAgent(getattr(enums.Character, args.char)), 
-               CPU(getattr(enums.Character, args.opp_char), cpu_lvl)]
-    register(
-        id=id,
-        entry_point=f'basics.env:{id}',
-        kwargs={'config': {
+# ex) python power_test.py --char DOC --model_path /home/tgkang/saved_model/aginst_cpu_FD/DOC_cpu.pt 
+# --op_char LUIGI --op_model_path /home/tgkang/saved_model/aginst_cpu_FD/LUIGI_cpu.pt
+class Powertest:
+    def __init__(self, save_replay=False):
+        self.config = {
             "iso_path": args.iso,
-            "players": players,
-            "agent_id": 1, # for 1p,
-            "n_states": 869 if args.stage == "FINAL_DESTINATION" else 885,
-            "n_actions": 29, #28,
-            "save_replay": False, #True 
             "stage": getattr(enums.Stage, args.stage),
-        }},
-    )
-    return gym.make(id)
+            "players": None,
+            "agent_id": 1,
+            "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
+            "n_actions": 30, # 25
+            "save_replay": save_replay
+        }
+    
+    def make_env(self, id, players):
+        self.config["players"] = players
+        register(
+            id=id,
+            entry_point=f'basics.env:{id}',
+            kwargs={'config': self.config},
+        )
+        return gym.make(id)
+    
+    def kill_dolphin(self):
+        current_user = os.getlogin()
+        for proc in psutil.process_iter(['pid', 'username', 'name']):
+            try:
+                if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
+                    parent_pid = proc.pid
+                    parent = psutil.Process(parent_pid)
+                    for child in parent.children(recursive=True):
+                        child.kill()
+                    parent.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
 
-def match(model_path, lvl):
-    env = make_env(id="MultiMeleeEnv", cpu_lvl=lvl)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
+    def match(self, lvl=None):
+        if args.op_model_path is None:      
+            players = [MyAgent(getattr(enums.Character, args.char)), 
+                    CPU(getattr(enums.Character, args.op_char), lvl)]
+        else:
+            players = [MyAgent(getattr(enums.Character, args.char)), 
+                    MyAgent(getattr(enums.Character, args.op_char))]
+        env = self.make_env(id="MultiMeleeEnv", players=players)
+        device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 
-    models_ppo = {}
-    models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
-                                    num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-    models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
-                                    num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
+        models_ppo = {}
+        models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
 
-    agent_ppo = PPOGRUAgent(models=models_ppo,
-                    observation_space=env.observation_space,
-                    action_space=env.action_space,
-                    device=device, 
-                    agent_id = 1,
-                    platform=False if args.stage == "FINAL_DESTINATION" else True)
+        agent_ppo = PPOGRUAgent(models=models_ppo,
+                        observation_space=env.observation_space,
+                        action_space=env.action_space,
+                        device=device, 
+                        agent_id = 1,
+                        platform=False if args.stage == "FINAL_DESTINATION" else True)
+        agent_ppo.load(args.model_path)
+        agent_ppo.set_mode("eval")
+        agent_ppo.init()
+        if args.op_model_path is not None:
+            op_ppo = PPOGRUAgent(models=models_ppo,
+                        observation_space=env.observation_space,
+                        action_space=env.action_space,
+                        device=device, 
+                        agent_id=2)
+            op_ppo.load(args.op_model_path)
+            op_ppo.set_mode("eval")
+            op_ppo.init()
+        
+        state, info = env.reset()
+        done = False
+        while not done:
+            with torch.no_grad():
+                action, _ = agent_ppo.act(state, 1, 0)
+                op_action = 0
+                if args.op_model_path is not None:
+                    op_action, _ = op_ppo.act(state, 1, 0)
+            next_state, reward, done, truncated, info = env.step((action, op_action))
+            state = next_state
+        env.close()
+        if state.player[1].stock > state.player[2].stock:
+            return 1
+        elif state.player[1].stock < state.player[2].stock:
+            return -1
+        else:
+            return 0
+     
+    def run_cpu(self):
+        self.kill_dolphin()
+        wins = [0] * 9
+        loses = [0] * 9
+        for lvl in range(1, 10):
+            futures = []
+            for _ in range(10):
+                futures.append((self.match, lvl))
+            with ProcessPoolExecutor(max_workers=32) as executor:
+                futures = [executor.submit(*x) for x in futures]
+            for future in futures:
+                try:
+                    if future.result() == 1:        
+                        wins[lvl - 1] += 1
+                    elif future.result() == -1:
+                        loses[lvl - 1] += 1
+                except Exception as e:
+                    print(f"error ouccured: {e}")
+            self.kill_dolphin()
+            print("wins: ", wins)
+            print("loses: ", loses)
+        
+        directory_path = args.model_path[:-3]
+        if not os.path.exists(directory_path):
+            os.makedirs(directory_path)
+        output_file = directory_path + f"/{args.op_char}.csv"
+        with open(output_file, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Level", "Wins", "Loses"])
+            for level in range(1, 10):
+                writer.writerow([level, wins[level - 1], loses[level - 1]])
 
-    agent_ppo.load(model_path)
-    agent_ppo.set_mode("eval")
-    agent_ppo.init()
-    state, info = env.reset()
-    done = False
-    while not done:
-        with torch.no_grad():
-            action, _ = agent_ppo.act(state, 1, 0)
-        next_state, reward, done, truncated, info = env.step((action, 0))
-        state = next_state
-    env.close()
-    if state.player[1].stock > state.player[2].stock:
-        return 1
-    elif state.player[1].stock < state.player[2].stock:
-        return -1
-
-def kill_dolphin():
-    current_user = os.getlogin()
-
-    for proc in psutil.process_iter(['pid', 'username', 'name']):
-        try:
-            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
-                parent_pid = proc.pid
-                parent = psutil.Process(parent_pid)
-                for child in parent.children(recursive=True):
-                    child.kill()
-                parent.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
-
-PARALLEL_NUM = 10
-wins = [0] * 9
-loses = [0] * 9
-
-kill_dolphin()
-for lvl in range(1, 10):
-    futures = []
-    for _ in range(PARALLEL_NUM):
-        futures.append((match, args.model_path, lvl))
-    with ProcessPoolExecutor(max_workers=32) as executor:
-        futures = [executor.submit(*x) for x in futures]
-    for future in futures:
-        try:
-            if future.result() == 1:        
-                wins[lvl - 1] += 1
-            elif future.result() == -1:
-                loses[lvl - 1] += 1
-        except Exception as e:
-            print(f"error ouccured: {e}")
-    kill_dolphin()
-    print("wins: ", wins)
-    print("loses: ", loses)
-
-directory_path = args.model_path[:-3]
-if not os.path.exists(directory_path):
-    os.makedirs(directory_path)
-output_file = directory_path + f"/{args.opp_char}.csv"
-with open(output_file, mode='w', newline='') as file:
-    writer = csv.writer(file)
-    writer.writerow(["Level", "Wins", "Loses"])
-    for level in range(1, 10):
-        writer.writerow([level, wins[level - 1], loses[level - 1]])
+P = Powertest(save_replay=True)
+# P.match(lvl=1) # for cpu eval
+# P.match() # for multi eval
+P.run_cpu() # for cpu power test
