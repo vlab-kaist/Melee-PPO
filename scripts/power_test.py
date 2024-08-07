@@ -94,7 +94,7 @@ class Powertest:
             players = [MyAgent(getattr(enums.Character, args.char)), 
                     MyAgent(getattr(enums.Character, args.op_char))]
         env = self.make_env(id="MultiMeleeEnv", players=players)
-        device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cpu") #torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 
         models_ppo = {}
         models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
@@ -116,7 +116,8 @@ class Powertest:
                         observation_space=env.observation_space,
                         action_space=env.action_space,
                         device=device, 
-                        agent_id=2)
+                        agent_id=2, 
+                        platform=False if args.stage == "FINAL_DESTINATION" else True)
             op_ppo.load(args.op_model_path)
             op_ppo.set_mode("eval")
             op_ppo.init()
@@ -138,29 +139,60 @@ class Powertest:
             return -1
         else:
             return 0
-     
-    def run_cpu(self):
+    
+    def run_test(self, lvl=None):
+        """
+        match 10 times and return wins, loses
+        """
         self.kill_dolphin()
-        wins = [0] * 9
-        loses = [0] * 9
-        for lvl in range(1, 10):
+        wins = 0
+        loses = 0
+        if lvl is not None:
             futures = []
             for _ in range(10):
                 futures.append((self.match, lvl))
-            with ProcessPoolExecutor(max_workers=32) as executor:
+            with ProcessPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(*x) for x in futures]
             for future in futures:
                 try:
                     if future.result() == 1:        
-                        wins[lvl - 1] += 1
+                        wins += 1
                     elif future.result() == -1:
-                        loses[lvl - 1] += 1
+                        loses += 1
                 except Exception as e:
                     print(f"error ouccured: {e}")
-            self.kill_dolphin()
-            print("wins: ", wins)
-            print("loses: ", loses)
-        
+        else:
+            futures = []
+            for _ in range(10):
+                futures.append((self.match, ))
+            with ProcessPoolExecutor(max_workers=10) as executor:
+                futures = [executor.submit(*x) for x in futures]
+            for future in futures:
+                try:
+                    if future.result() == 1:        
+                        wins += 1
+                    elif future.result() == -1:
+                        loses += 1
+                except Exception as e:
+                    print(f"error ouccured: {e}")
+        self.kill_dolphin()
+        print(f"me: {args.char} , opp: {args.op_char}")
+        print("wins: ", wins)
+        print("loses: ", loses)
+        return wins, loses
+            
+    def run_cpu_test(self):
+        """
+        match with all cpus 10 times and return wins, loses
+        """
+        self.kill_dolphin()
+        wins = [0] * 9
+        loses = [0] * 9
+        for lvl in range(1, 10):
+            w, l = self.run_test(lvl)
+            print(w, l)
+            wins[lvl - 1] = w
+            loses[lvl - 1] = l
         directory_path = args.model_path[:-3]
         if not os.path.exists(directory_path):
             os.makedirs(directory_path)
@@ -174,4 +206,5 @@ class Powertest:
 P = Powertest(save_replay=True)
 # P.match(lvl=1) # for cpu eval
 # P.match() # for multi eval
-P.run_cpu() # for cpu power test
+#P.run_test() # for specific power test
+P.run_cpu_test() # for all level power test
