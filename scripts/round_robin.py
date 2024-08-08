@@ -123,19 +123,19 @@ def match(p1, p2, stage):
 
 def parallel_match(p1, p2, stage, parallel_num=10):
     futures = []
-    for _ in range(10):
+    for _ in range(1):
         futures.append((match, p1, p2, stage))
     with ProcessPoolExecutor(max_workers=parallel_num) as executor:
         futures = [executor.submit(*x) for x in futures]
     for future in futures:
         try:
             if future.result() == 1:        
-                if not p1.wins:
+                if not p2.id in p1.wins:
                     p1.wins[p2.id] = 1
                 else:   
                     p1.wins[p2.id] += 1
             elif future.result() == -1:
-                if not p2.wins:
+                if not p1.id in p2.wins:
                     p2.wins[p1.id] = 1
                 else:   
                     p2.wins[p1.id] += 1
