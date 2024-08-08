@@ -126,7 +126,7 @@ def match(p1, p2, stage):
 def parallel_match(p1, p2, stage, parallel_num=10):
     futures = []
     for _ in range(10):
-        futures.append((test, p1, p2, stage))
+        futures.append((match, p1, p2, stage))
     with ProcessPoolExecutor(max_workers=parallel_num) as executor:
         futures = [executor.submit(*x) for x in futures]
     p1.wins[p2.id] = 0
