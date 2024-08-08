@@ -21,6 +21,7 @@ from skrl.envs.torch import wrap_env
 import sys
 import os
 import csv
+import psutil
 
 import melee
 from melee import enums
@@ -114,6 +115,7 @@ def match(p1, p2, stage):
         next_state, reward, done, truncated, info = env.step((action, op_action))
         state = next_state
     env.close()
+    
     if state.player[1].stock > state.player[2].stock:
         return 1
     elif state.player[1].stock < state.player[2].stock:
@@ -124,21 +126,17 @@ def match(p1, p2, stage):
 def parallel_match(p1, p2, stage, parallel_num=10):
     futures = []
     for _ in range(10):
-        futures.append((match, p1, p2, stage))
+        futures.append((test, p1, p2, stage))
     with ProcessPoolExecutor(max_workers=parallel_num) as executor:
         futures = [executor.submit(*x) for x in futures]
+    p1.wins[p2.id] = 0
+    p2.wins[p1.id] = 0
     for future in futures:
         try:
             if future.result() == 1:        
-                if not p2.id in p1.wins:
-                    p1.wins[p2.id] = 1
-                else:   
-                    p1.wins[p2.id] += 1
+                p1.wins[p2.id] += 1
             elif future.result() == -1:
-                if not p1.id in p2.wins:
-                    p2.wins[p1.id] = 1
-                else:   
-                    p2.wins[p1.id] += 1
+                p2.wins[p1.id] += 1
         except Exception as e:
             print(f"error ouccured: {e}")
     print(f"{p1.char} vs {p2.char} {p1.wins[p2.id]}:{p2.wins[p1.id]}")
@@ -157,8 +155,8 @@ for i in range(len(agents)):
 
 win_matrix = np.zeros((len(agents), len(agents)), dtype=int)
 for agent in agents:
-    for opponent_id, wins in agent.wins.items():
-        win_matrix[agent.id, opponent_id] = wins
-
+    for opp_id, win in agent.wins.items():
+        win_matrix[agent.id][opp_id] = win
+    
 print("Win Matrix:")
 print(win_matrix)
