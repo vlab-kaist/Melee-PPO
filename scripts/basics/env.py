@@ -242,7 +242,6 @@ class MultiMeleeEnv(gym.Env):
         self.env = MeleeEnv(config["iso_path"], config["players"], fast_forward=True, save_replays= config["save_replay"])
         # with FileLock("thisislock.lock"): self.env.start()
         self.run = False
-        self.agent_id = config["agent_id"]
         self.action_space = gym.spaces.Discrete(config["n_actions"])
         low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
         high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
@@ -289,38 +288,21 @@ class SelfPlayMeleeEnv(gym.Env):
         models_ppo = {}
         device = torch.device('cpu')
         
-        if config["actor"].agent_type == AgentType.STACK:
-            low = np.array([-10000]*config["n_states"]*16, dtype=np.float32).reshape(-1)
-            high = np.array([10000]*config["n_states"]*16, dtype=np.float32).reshape(-1)
-            observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
-            
-            models_ppo["policy"] = Policy(observation_space, self.action_space, device)
-            models_ppo["value"] = Value(observation_space, self.action_space, device)
-            
-            self.op_agent = StackedPPOAgent(models=models_ppo,
-                    observation_space=observation_space,
-                    action_space=self.action_space,
-                    device=device, 
-                    agent_id = 1 if self.agent_id == 2 else 2,
-                    stack_size=16,
-                    platform=self.platform)
-            
-        elif config["actor"].agent_type == AgentType.GRU:
-            low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
-            high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
-            observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
-            
-            models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
-                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-            models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
-                                num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-            
-            self.op_agent = PPOGRUAgent(models=models_ppo,
-                    observation_space=observation_space,
-                    action_space=self.action_space,
-                    device=device, 
-                    agent_id = 1 if self.agent_id == 2 else 2,
-                    platform=self.platform)
+        low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
+        high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
+        observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        
+        models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        
+        self.op_agent = PPOGRUAgent(models=models_ppo,
+                observation_space=observation_space,
+                action_space=self.action_space,
+                device=device, 
+                agent_id = 1 if self.agent_id == 2 else 2,
+                platform=self.platform)
         
         self.op_agent.load(config["actor"].model_path)
         self.op_agent.set_mode("eval")
