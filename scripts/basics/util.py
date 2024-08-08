@@ -189,7 +189,6 @@ class ActionSpace:
         # melee.enums.Button.BUTTON_L, #4
         # melee.enums.Button.BUTTON_Y, #5
         # melee.enums.Button.BUTTON_C #6
-        #TODO: need to apply yp z [0, 1, 3]
         self.action_space = np.array(
             [
                 [0, 0, 0], #0
@@ -222,6 +221,10 @@ class ActionSpace:
                 [0, 1, 6],  # 27
                 [0, -1, 6],  # 28
                 [0, 1, 3], # 29
+                [-mid, -mid, 2], # 30 for recovery from now on
+                [mid, -mid, 2], # 31
+                [-mid, -mid, 0], # 32
+                [mid, -mid, 0], # 33
             ],
             dtype=np.float32,
         )

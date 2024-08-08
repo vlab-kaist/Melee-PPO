@@ -38,7 +38,7 @@ class PPOGRUAgent(PPO_RNN):
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         if isinstance(self.gamestate, melee.gamestate.GameState):
             ai = self.gamestate.players[self.agent_id]
-            if ai.on_ground and self.action == 11: # cyclone is charged when down b occurs on ground
+            if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH) or ai.action.value <= 10: # cyclone is charged when down b occurs on ground
                 self.cyclone = False
             if ai.on_ground or not ai.off_stage:
                 self.side_b = False
@@ -87,7 +87,7 @@ class PPOGRUAgent(PPO_RNN):
         self.gamestate = infos["gamestate"]
     
     def mario_recovery(self):
-        # TODO: check avaiable recoverable distance and use down-B
+        # maybe optimal?
         self.macro_mode = True
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
@@ -99,9 +99,12 @@ class PPOGRUAgent(PPO_RNN):
             if ai.jumps_left > 0: # jump
                 self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
             else: 
-                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
+                if ai.position.y > -20 and abs(ai.position.x) - edge_pos > 0: # just move
                     self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-                elif abs(ai.position.x) - edge_pos > 40 and not self.side_b: # 40 => more larger ex.50?
+                elif abs(ai.position.x) - edge_pos > 40 and not self.cyclone:
+                    self.macro_queue = [33, 33, 31, 31] * 15 if is_left else [32, 32, 30, 30] * 15
+                    self.cyclone = True
+                elif abs(ai.position.x) - edge_pos > 40 and ai.position.y > -10 and not self.side_b: # 40 => more larger ex.50?
                     self.macro_queue = [10, 10, 10] if is_left else [9, 9, 9] # apply side B
                     self.macro_queue += [2, 2] * 20 if is_left else [1, 1] * 20 # this is important
                     self.side_b = True
@@ -127,7 +130,7 @@ class PPOGRUAgent(PPO_RNN):
                     self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
     
     def pikachu_recovery(self):
-        # TODO: need to use side B for reducing distance
+        # maybe optimal?
         self.macro_mode = True
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
@@ -181,8 +184,8 @@ class PPOGRUAgent(PPO_RNN):
             else: 
                 if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
                     self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-                elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone: # cyclone if possible
-                    self.macro_queue = [11, 0] * 25
+                elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone:
+                    self.macro_queue = [33, 33, 31, 31] * 15 if is_left else [32, 32, 30, 30] * 15
                     self.cyclone = True
                 elif abs(ai.position.x) - edge_pos < 15: # up B
                     self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
