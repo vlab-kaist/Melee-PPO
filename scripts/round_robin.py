@@ -141,7 +141,7 @@ def parallel_match(p1, p2, stage, parallel_num=10):
                     p2.wins[p1.id] += 1
         except Exception as e:
             print(f"error ouccured: {e}")
-    print(f"{p1.char} vs {p2.char} {p1.wins[p2.id]:p2.wins[p1.id]}")
+    print(f"{p1.char} vs {p2.char} {p1.wins[p2.id]}:{p2.wins[p1.id]}")
         
 characters = ["DOC", "LINK", "LUIGI", "MARIO", "PIKACHU", "YOSHI"]
 agents = []
