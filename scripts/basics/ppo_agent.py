@@ -294,7 +294,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
     if p1.action.value < 386:
         state[36 + p1.action.value] = 1.0
     if p2.action.value < 386:
-        state[36 + 386 + p2.action.value - 6] = 1.0
+        state[36 + 386 + p2.action.value] = 1.0
     
     # if the type is same, then apply only once
     projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]

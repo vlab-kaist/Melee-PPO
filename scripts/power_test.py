@@ -21,6 +21,7 @@ from skrl.envs.torch import wrap_env
 import sys
 import os
 import csv
+import psutil
 
 import melee
 from melee import enums
@@ -41,7 +42,7 @@ parser.add_argument(
     "--model_path", default=None, type=str, help="model for evaluate"
 )
 parser.add_argument(
-    "--op_char", default="LUIGI", type=str, help="opponent character"
+    "--op_char", default=None, type=str, help="opponent character"
 )
 parser.add_argument(
     "--op_model_path", default=None, type=str, help="opponent model path"
@@ -60,7 +61,7 @@ class Powertest:
             "players": None,
             "agent_id": 1,
             "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
-            "n_actions": 30, # 25
+            "n_actions": 36, # 25
             "save_replay": save_replay
         }
     
@@ -176,9 +177,6 @@ class Powertest:
                 except Exception as e:
                     print(f"error ouccured: {e}")
         self.kill_dolphin()
-        print(f"me: {args.char} , opp: {args.op_char}")
-        print("wins: ", wins)
-        print("loses: ", loses)
         return wins, loses
             
     def run_cpu_test(self):
@@ -186,13 +184,14 @@ class Powertest:
         match with all cpus 10 times and return wins, loses
         """
         self.kill_dolphin()
-        wins = [0] * 9
-        loses = [0] * 9
-        for lvl in range(1, 10):
+        wins = [0] * 3
+        loses = [0] * 3
+        for lvl in range(7, 10):
             w, l = self.run_test(lvl)
-            print(w, l)
-            wins[lvl - 1] = w
-            loses[lvl - 1] = l
+            wins[lvl - 7] = w
+            loses[lvl - 7] = l
+            print(wins)
+            print(loses)
         directory_path = args.model_path[:-3]
         if not os.path.exists(directory_path):
             os.makedirs(directory_path)
@@ -200,11 +199,12 @@ class Powertest:
         with open(output_file, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Level", "Wins", "Loses"])
-            for level in range(1, 10):
-                writer.writerow([level, wins[level - 1], loses[level - 1]])
-
-P = Powertest(save_replay=True)
-# P.match(lvl=1) # for cpu eval
-# P.match() # for multi eval
-#P.run_test() # for specific power test
-P.run_cpu_test() # for all level power test
+            for level in range(7, 10):
+                writer.writerow([level, wins[level - 7], loses[level - 7]])
+                
+if __name__ == "__main__":
+    P = Powertest(save_replay=True)
+    #P.match(lvl=9) # for cpu eval
+    # P.match() # for multi eval
+    #P.run_test() # for specific power test
+    P.run_cpu_test() # for all level power test

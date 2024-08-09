@@ -69,7 +69,7 @@ def make_env(id, cpu_lvl):
             "players": players,
             "agent_id": 1, # for 1p,
             "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
-            "n_actions": 30, #28,
+            "n_actions": 36,
             "save_replay": False,
             "stage": getattr(enums.Stage, args.stage),
         }},

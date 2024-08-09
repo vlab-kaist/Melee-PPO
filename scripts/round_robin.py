@@ -51,16 +51,16 @@ def make_env(players, stage):
             "stage": getattr(enums.Stage, stage),
             "players": None,
             "n_states": 864 if stage == "FINAL_DESTINATION" else 880,
-            "n_actions": 30, # 25
+            "n_actions": 36, # 25
             "save_replay": False
         }
     config["players"] = players
     register(
-        id='RoundRobin',
+        id='myenv',
         entry_point='basics.env:MultiMeleeEnv',
         kwargs={'config': config},
     )
-    return gym.make('RoundRobin')
+    return gym.make('myenv')
 
 def kill_dolphin():
     current_user = os.getlogin()
@@ -123,7 +123,7 @@ def match(p1, p2, stage):
     else:
         return 0
 
-def parallel_match(p1, p2, stage, parallel_num=10):
+def parallel_match(p1, p2, stage, parallel_num=5):
     futures = []
     for _ in range(10):
         futures.append((match, p1, p2, stage))
@@ -156,7 +156,16 @@ for i in range(len(agents)):
 win_matrix = np.zeros((len(agents), len(agents)), dtype=int)
 for agent in agents:
     for opp_id, win in agent.wins.items():
-        win_matrix[agent.id][opp_id] = win
-    
+        win_matrix[agent.id, opp_id] = win
 print("Win Matrix:")
 print(win_matrix)
+
+plt.figure(figsize=(10, 8))
+sns.heatmap(win_matrix, annot=True, fmt="d", cmap="coolwarm", xticklabels=characters, yticklabels=characters, cbar=True)
+plt.title("Win Matrix")
+plt.xlabel("Opponent")
+plt.ylabel("Player")
+
+# 이미지 저장
+plt.savefig('win_matrix.png')
+plt.close()
