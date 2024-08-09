@@ -42,7 +42,7 @@ class PPOGRUAgent(PPO_RNN):
                 self.cyclone = False
             if ai.on_ground or not ai.off_stage:
                 self.side_b = False
-            if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
+            if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING] and ai.character != Character.LINK:
                 self.macro_mode = False
                 self.macro_queue = []
                 self.macro_idx = 0
@@ -57,27 +57,29 @@ class PPOGRUAgent(PPO_RNN):
                     self.yoshi_recovery()
                 else:
                     self.luigi_recovery()
-            if self.macro_mode:
-                self.action = self.macro_queue[self.macro_idx]
-                self.macro_idx += 1
-                if self.macro_idx >= len(self.macro_queue):
-                    self.macro_idx = 0
-                    self.macro_mode = False
-                    self.macro_queue = []
-                return self.action, self._current_log_prob
-        if self.action_cnt >= 3:   
-            rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
-            actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
-            self._current_log_prob = log_prob
-            self.action = actions
-            self.action_cnt = 1
-            
-            if self._rnn:
-                self._rnn_final_states["policy"] = outputs.get("rnn", [])
+        if self.macro_mode:
+            self.action = self.macro_queue[self.macro_idx]
+            self.prev = self.action
+            self.macro_idx += 1
+            if self.macro_idx >= len(self.macro_queue):
+                self.macro_idx = 0
+                self.macro_mode = False
+                self.macro_queue = []
+            self.action = torch.tensor(self.action).unsqueeze(0)
+            return self.action, self._current_log_prob
         else:
-            self.action_cnt += 1
-        return self.action, self._current_log_prob
-        #return 0, self._current_log_prob
+            if self.action_cnt >= 3:   
+                rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
+                actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
+                self._current_log_prob = log_prob
+                self.action = actions
+                self.action_cnt = 1
+                
+                if self._rnn:
+                    self._rnn_final_states["policy"] = outputs.get("rnn", [])
+            else:
+                self.action_cnt += 1
+            return self.action, self._current_log_prob
     
     def state_preprocess(self, gamestate):
         return state_preprocess(gamestate, self.agent_id, self.platform)
@@ -112,22 +114,43 @@ class PPOGRUAgent(PPO_RNN):
                     self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
     
     def link_recovery(self):
-        # TODO: ues z (lope) for catching side edge or side / use bomb
+        # maybe optimal?
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
         self.macro_mode = True
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
-        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
-        is_left = ai.position.x < 0
-        if ai.position.y > 0: # just move
-            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        is_left = ai.x < 0
+        if abs(ai.position.x) < edge_pos:
+            is_left = not is_left
+        edge_diff= abs(ai.position.x) - edge_pos
+        if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
+    Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
+            if (self.prev == 19):
+                self.macro_queue = [0]
+            else:
+                self.macro_queue = [19] # use L key
+        elif ai.action in [Action.DOWN_B_GROUND]: # if agent holds grab
+            if(ai.action_frame == 30):
+                self.macro_queue = [15]
+            else:
+                self.macro_queue = [0]
+        elif ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
+            self.macro_queue = [2] if is_left else [1]
         else:
-            if ai.jumps_left > 0: # jump
-                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            if (ai.action in [Action.AIRDODGE]): #grab should be executed within 49 frame after airdodge
+                if (edge_diff < 50 or ai.action_frame >= 30):
+                    self.macro_queue = [17] if is_left else [16]
+                else:
+                    self.macro_queue = [19]    
+            elif ai.jumps_left > 0: #jump
+                self.macro_queue = [21] if is_left else [20]
             else: 
-                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
-                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-                else: # up B
-                    self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
+                if(ai.position.y < -50): #b special
+                    self.macro_queue = [14] if is_left else [13]
+                elif(edge_diff < 120): # airdodge
+                    self.macro_queue = [35] if is_left else [34] #arrow + L. 
+                else: #move
+                    self.macro_queue = [2] if is_left else [1]
     
     def pikachu_recovery(self):
         # maybe optimal?
