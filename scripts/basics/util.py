@@ -220,8 +220,8 @@ class ActionSpace:
                 [-1, 0, 6],  # 26
                 [0, 1, 6],  # 27
                 [0, -1, 6],  # 28
-                [0, 1, 3], # 29 ------------------------------- for training
-                [-mid, -mid, 2], # 30 for recovery from now on
+                [0, 1, 3], # 29
+                [-mid, -mid, 2], # 30
                 [mid, -mid, 2], # 31
                 [-mid, -mid, 0], # 32
                 [mid, -mid, 0], # 33
@@ -345,7 +345,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
     if p1.action.value < 386:
         state[36 + p1.action.value] = 1.0
     if p2.action.value < 386:
-        state[36 + 386 + p2.action.value - 6] = 1.0
+        state[36 + 386 + p2.action.value] = 1.0
     
     # if the type is same, then apply only once
     projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]
