@@ -284,30 +284,6 @@ class SelfPlayMeleeEnv(gym.Env):
         self.platform = config["stage"] != getattr(enums.Stage, "FINAL_DESTINATION")
         if self.platform:
             self.env.observation_space = PlatformObservationSpace()
-        
-        models_ppo = {}
-        device = torch.device('cpu')
-        
-        low = np.array([-10000]*config["n_states"], dtype=np.float32).reshape(-1)
-        high = np.array([10000]*config["n_states"], dtype=np.float32).reshape(-1)
-        observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
-        
-        models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
-                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-        models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
-                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-        
-        self.op_agent = PPOGRUAgent(models=models_ppo,
-                observation_space=observation_space,
-                action_space=self.action_space,
-                device=device, 
-                agent_id = 1 if self.agent_id == 2 else 2,
-                platform=self.platform)
-        
-        self.op_agent.load(config["actor"].model_path)
-        self.op_agent.set_mode("eval")
-        self.op_agent.init()
-        
         self.gamestate = None
 
     def reset(self, *, seed=None, options=None):
@@ -317,7 +293,24 @@ class SelfPlayMeleeEnv(gym.Env):
             self.env.start()
         self.run = True
         obs, self.gamestate = self.env.setup(self.config["stage"])
-        #self.stacked_obs = np.tile(obs[self.agent_id - 1], (self.stack_size, 1))
+        
+        models_ppo = {}
+        device = torch.device('cpu')
+        models_ppo["policy"] = GRUPolicy(self.observation_space, self.action_space, device, num_envs=1,
+                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        models_ppo["value"] = GRUValue(self.observation_space, self.action_space, device, num_envs=1,
+                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        self.op_agent = PPOGRUAgent(models=models_ppo,
+                observation_space=self.observation_space,
+                action_space=self.action_space,
+                device=device, 
+                agent_id = 1 if self.agent_id == 2 else 2,
+                platform=self.platform)
+        self.op_agent.load(self.config["actor_model"])
+        self.op_agent.set_mode("eval")
+        self.op_agent.set_running_mode("eval")
+        self.op_agent.init()
+        
         return obs[self.agent_id - 1], {'gamestate': self.gamestate}
     
     def step(self, action):
