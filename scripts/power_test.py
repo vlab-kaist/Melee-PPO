@@ -111,7 +111,7 @@ class Powertest:
                         platform=False if args.stage == "FINAL_DESTINATION" else True)
         agent_ppo.load(args.model_path)
         agent_ppo.set_mode("eval")
-        op_ppo.set_running_mode("eval")
+        agent_ppo.set_running_mode("eval")
         agent_ppo.init()
         if args.op_model_path is not None:
             op_ppo = PPOGRUAgent(models=models_ppo,
