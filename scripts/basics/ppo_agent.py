@@ -72,7 +72,10 @@ class PPOGRUAgent(PPO_RNN):
                 rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
                 actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
                 self._current_log_prob = log_prob
-                self.action = actions
+                if not self.training:
+                    self.action = torch.argmax(outputs["net_output"]).unsqueeze(0)
+                else:
+                    self.action = actions
                 self.action_cnt = 1
                 
                 if self._rnn:

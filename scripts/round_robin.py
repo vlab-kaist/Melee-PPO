@@ -95,6 +95,7 @@ def match(p1, p2, stage):
                     platform=False if stage == "FINAL_DESTINATION" else True)
     agent_ppo.load(p1.model_path)
     agent_ppo.set_mode("eval")
+    op_ppo.set_running_mode("eval")
     agent_ppo.init()
     op_ppo = PPOGRUAgent(models=models_ppo,
                 observation_space=env.observation_space,
@@ -104,6 +105,7 @@ def match(p1, p2, stage):
                 platform=False if stage == "FINAL_DESTINATION" else True)
     op_ppo.load(p2.model_path)
     op_ppo.set_mode("eval")
+    op_ppo.set_running_mode("eval")
     op_ppo.init()
     
     state, info = env.reset()
