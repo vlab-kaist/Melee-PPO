@@ -73,7 +73,9 @@ class PPOGRUAgent(PPO_RNN):
                 actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
                 self._current_log_prob = log_prob
                 if not self.training:
-                    self.action = torch.argmax(outputs["net_output"]).unsqueeze(0)
+                    probabilities = F.softmax(outputs["net_output"] / 0.5, dim=-1)
+                    self.action = torch.multinomial(probabilities, num_samples=1).unsqueeze(0)
+                    # self.action = torch.argmax(outputs["net_output"]).unsqueeze(0)
                 else:
                     self.action = actions
                 self.action_cnt = 1
