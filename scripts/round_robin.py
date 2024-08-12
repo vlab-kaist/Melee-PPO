@@ -22,6 +22,8 @@ import sys
 import os
 import csv
 import psutil
+import matplotlib.pyplot as plt  # Uncomment if plotting is required
+import seaborn as sns
 
 import melee
 from melee import enums
@@ -97,7 +99,13 @@ def match(p1, p2, stage):
     agent_ppo.set_mode("eval")
     agent_ppo.set_running_mode("eval")
     agent_ppo.init()
-    op_ppo = PPOGRUAgent(models=models_ppo,
+    
+    op_models_ppo = {}
+    op_models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                    num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+    op_models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                    num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+    op_ppo = PPOGRUAgent(models=op_models_ppo,
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device, 
@@ -117,7 +125,7 @@ def match(p1, p2, stage):
         next_state, reward, done, truncated, info = env.step((action, op_action))
         state = next_state
     env.close()
-    
+    print(state.player[1].stock, state.player[2].stock)
     if state.player[1].stock > state.player[2].stock:
         return 1
     elif state.player[1].stock < state.player[2].stock:
@@ -125,7 +133,7 @@ def match(p1, p2, stage):
     else:
         return 0
 
-def parallel_match(p1, p2, stage, parallel_num=5):
+def parallel_match(p1, p2, stage, parallel_num=1):
     futures = []
     for _ in range(10):
         futures.append((match, p1, p2, stage))
@@ -146,13 +154,13 @@ def parallel_match(p1, p2, stage, parallel_num=5):
 characters = ["DOC", "LINK", "LUIGI", "MARIO", "PIKACHU", "YOSHI"]
 agents = []
 for i, char in enumerate(characters):
-    model_path = f"/home/tgkang/saved_model/aginst_cpu_FD/{char}_cpu.pt"
+    model_path = f"/home/tgkang/saved_model/against_cpu_FD/{char}_FD.pt"
     agent = Player(char=char, model_path=model_path, id=i)
     agents.append(agent)
 
 for i in range(len(agents)):
     for j in range(i + 1, len(agents)):
-        parallel_match(agents[i], agents[j], stage="FINAL_DESTINATION")
+        parallel_match(agents[j], agents[i], stage="FINAL_DESTINATION")
         kill_dolphin()
 
 win_matrix = np.zeros((len(agents), len(agents)), dtype=int)
@@ -168,6 +176,5 @@ plt.title("Win Matrix")
 plt.xlabel("Opponent")
 plt.ylabel("Player")
 
-# 이미지 저장
 plt.savefig('win_matrix.png')
 plt.close()

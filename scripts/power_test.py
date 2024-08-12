@@ -102,7 +102,6 @@ class Powertest:
                                         num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
         models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
                                         num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
-
         agent_ppo = PPOGRUAgent(models=models_ppo,
                         observation_space=env.observation_space,
                         action_space=env.action_space,
@@ -114,7 +113,12 @@ class Powertest:
         agent_ppo.set_running_mode("eval")
         agent_ppo.init()
         if args.op_model_path is not None:
-            op_ppo = PPOGRUAgent(models=models_ppo,
+            op_models_ppo = {}
+            op_models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+            op_models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                            num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
+            op_ppo = PPOGRUAgent(models=op_models_ppo,
                         observation_space=env.observation_space,
                         action_space=env.action_space,
                         device=device, 
@@ -206,7 +210,7 @@ class Powertest:
                 
 if __name__ == "__main__":
     P = Powertest(save_replay=True)
-    #P.match(lvl=9) # for cpu eval
-    P.match() # for multi eval
+    P.match(lvl=9) # for cpu eval
+    #P.match() # for multi eval
     #P.run_test() # for specific power test
     #P.run_cpu_test() # for all level power test
