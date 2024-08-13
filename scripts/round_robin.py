@@ -133,9 +133,9 @@ def match(p1, p2, stage):
     else:
         return 0
 
-def parallel_match(p1, p2, stage, parallel_num=1):
+def parallel_match(p1, p2, stage, parallel_num=10):
     futures = []
-    for _ in range(10):
+    for _ in range(20):
         futures.append((match, p1, p2, stage))
     with ProcessPoolExecutor(max_workers=parallel_num) as executor:
         futures = [executor.submit(*x) for x in futures]
@@ -170,11 +170,31 @@ for agent in agents:
 print("Win Matrix:")
 print(win_matrix)
 
+# plot win matrix
 plt.figure(figsize=(10, 8))
 sns.heatmap(win_matrix, annot=True, fmt="d", cmap="coolwarm", xticklabels=characters, yticklabels=characters, cbar=True)
 plt.title("Win Matrix")
 plt.xlabel("Opponent")
 plt.ylabel("Player")
-
 plt.savefig('win_matrix.png')
 plt.close()
+
+
+#make helpful stats
+total_matches = win_matrix + win_matrix.T  # Sum of wins and losses for each matchup
+win_rate = np.sum(win_matrix, axis=1) / np.sum(total_matches, axis=1)
+
+# 2. Average Margin of Victory
+margin_of_victory = (win_matrix - win_matrix.T) / total_matches
+average_margin_of_victory = np.nanmean(margin_of_victory, axis=1)  # Ignore NaNs resulting from division by zero
+
+# 3. Head-to-Head Advantage
+head_to_head_advantage = np.sum(win_matrix > win_matrix.T, axis=1) - np.sum(win_matrix < win_matrix.T, axis=1)
+
+# Outputting the results
+for i, char in enumerate(characters):
+    print(f"{char}:")
+    print(f"  Win Rate: {win_rate[i]:.2%}")
+    print(f"  Average Margin of Victory: {average_margin_of_victory[i]:.2f}")
+    print(f"  Head-to-Head Advantage: {head_to_head_advantage[i]}")
+    print()
