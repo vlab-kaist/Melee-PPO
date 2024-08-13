@@ -348,7 +348,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
         state[36 + 386 + p2.action.value] = 1.0
     
     # if the type is same, then apply only once
-    projs = [x for x in gamestate.projectiles if x.owner == 2 and x.type in proj_mapping.keys()]
+    projs = [x for x in gamestate.projectiles if x.owner == 3 - agent_id and x.type in proj_mapping.keys()]
     for i, proj in enumerate(projs):
         state[36 + 386 * 2 + 4 * proj_mapping[proj.type]] = proj.position.x / edge_pos
         state[36 + 386 * 2 + 4 * proj_mapping[proj.type] + 1] = proj.position.y / edge_pos
