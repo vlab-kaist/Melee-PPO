@@ -135,7 +135,7 @@ class MeleeEnv:
     
     def step(self, *actions):
         for i, player in enumerate(self.players):
-            if player.agent_type == "CPU":
+            if player.agent_type in ["CPU", "HMN"]:
                 continue
             # controller = player.controller
             action = actions[i]
