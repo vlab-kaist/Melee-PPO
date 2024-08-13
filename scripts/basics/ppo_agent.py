@@ -130,15 +130,9 @@ class PPOGRUAgent(PPO_RNN):
         edge_diff= abs(ai.position.x) - edge_pos
         if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
     Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
-            if (self.prev == 19):
-                self.macro_queue = [0]
-            else:
-                self.macro_queue = [19] # use L key
+            self.macro_queue = [19, 0] # use L key
         elif ai.action in [Action.DOWN_B_GROUND]: # if agent holds grab
-            if(ai.action_frame == 30):
-                self.macro_queue = [15]
-            else:
-                self.macro_queue = [0]
+            self.macro_queue = [15, 0]
         elif ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
             self.macro_queue = [2] if is_left else [1]
         else:
