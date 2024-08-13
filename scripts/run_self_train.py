@@ -158,12 +158,11 @@ if __name__ == "__main__":
             s = trainers[char]
             s.init_timestep += s.timesteps
             exp_dir = os.path.join('.',s.exp_name)
-            new_model = os.path.join(exp_dir,"checkpoints",f"agent_{s.timesteps}.pt")
+            new_model = os.path.join(exp_dir,"checkpoints",f"agent_{s.init_timestep}.pt")
             if os.path.exists(new_model):
                 shutil.copy2(new_model, s.recent_model)
                 if not s.init_timestep % s.save_freq == 0:
                     os.remove(new_model)
-                    print("YEAH")
                 else:
                     s.models.push(new_model)
         kill_dolphin()
