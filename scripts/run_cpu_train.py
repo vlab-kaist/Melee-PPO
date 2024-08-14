@@ -9,11 +9,11 @@ from tqdm import tqdm
 
 # characters = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
 # stages = ["BATTLEFIELD", "FINAL_DESTINATION", "POKEMON_STADIUM"]
-character = "PIKACHU"
-stage = "FINAL_DESTINATION"
+character = "LINK"
+stage = "BATTLEFIELD"
 script_path = "./cpu_train.py"
 iso = "/home/tgkang/ssbm.iso"
-save_dir = "./RecoverAgainstCPU"
+save_dir = "./LINK_BF"
 init_timestep = 0
 timesteps = 18000
 save_freq = timesteps
@@ -23,8 +23,21 @@ real_freq = timesteps * 50
 
 recent_model = os.path.join(save_dir, "checkpoints", "recent_model.pt")
 
+def kill_dolphin():
+    for proc in psutil.process_iter(['pid', 'username', 'name']):
+        try:
+            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
+                parent_pid = proc.pid
+                parent = psutil.Process(parent_pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass  
+            
 def run_command(cmd):
     try:
+        current_user = os.getlogin()  
         process = subprocess.Popen(
             cmd,
             shell=True,
@@ -42,12 +55,13 @@ def run_command(cmd):
         print('Error output:', e.stderr)
     except subprocess.TimeoutExpired as e:
         print('The command timed out and was terminated.')
+        process.terminate()
         process.kill()
+        kill_dolphin()
     except Exception as e:
         print('An unexpected error occurred:', e)
     finally:
         print('Command finished.')
-        
 # first try
 cmd = (
         f"python {script_path} "
@@ -64,9 +78,11 @@ run_command(cmd)
 new_model = os.path.join(save_dir,"checkpoints",f"agent_{save_freq}.pt")
 shutil.copy2(new_model, recent_model)
 
+kill_dolphin()
 for i in tqdm(range(1, 10001), ncols=50):
+    kill_dolphin()
+    
     init_timestep = i * timesteps + 1
-
     cmd = (
         f"python {script_path} "
         f"--iso {iso} "
@@ -90,16 +106,4 @@ for i in tqdm(range(1, 10001), ncols=50):
             os.remove(new_model)
             
     time.sleep(0.1)
-    
-    current_user = os.getlogin()
-
-    for proc in psutil.process_iter(['pid', 'username', 'name']):
-        try:
-            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
-                parent_pid = proc.pid
-                parent = psutil.Process(parent_pid)
-                for child in parent.children(recursive=True):
-                    child.kill()
-                parent.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass    
+    kill_dolphin()
