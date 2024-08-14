@@ -24,6 +24,7 @@ real_freq = timesteps * 50
 recent_model = os.path.join(save_dir, "checkpoints", "recent_model.pt")
 
 def kill_dolphin():
+    current_user = os.getlogin()  
     for proc in psutil.process_iter(['pid', 'username', 'name']):
         try:
             if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
@@ -37,7 +38,6 @@ def kill_dolphin():
             
 def run_command(cmd):
     try:
-        current_user = os.getlogin()  
         process = subprocess.Popen(
             cmd,
             shell=True,
