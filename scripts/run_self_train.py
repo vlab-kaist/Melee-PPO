@@ -164,5 +164,5 @@ if __name__ == "__main__":
                 if not s.init_timestep % s.save_freq == 0:
                     os.remove(new_model)
                 else:
-                    s.models.push(new_model)
+                    s.models.push(char, new_model)
         kill_dolphin()
