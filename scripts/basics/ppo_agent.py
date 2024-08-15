@@ -177,17 +177,18 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
         edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        edge_diff = abs(ai.position.x) - edge_pos
         is_left = ai.position.x < 0
-        if ai.position.y > 20: # just move
-            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-        else:
-            if ai.jumps_left > 0: # jump
-                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
-            else: 
-                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
-                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-                else: # L
-                    self.macro_queue = [19, 19, 19] # need to change
+        if ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
+            self.macro_queue = [2] if is_left else [1]
+        elif ai.jumps_left > 0: #jump
+            self.macro_queue = [21] if is_left else [20]
+        else: 
+            if (edge_diff < 20) and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD,
+                                                      Action.JUMPING_ARIAL_FORWARD, Action.JUMPING_ARIAL_BACKWARD]: # airdodge
+                self.macro_queue = [35] if is_left else [34] #arrow + L. 
+            else: #move
+                self.macro_queue = [2] if is_left else [1]
     
     def luigi_recovery(self):
         # TODO: make more stable when left B fires, and move side using down B
