@@ -57,7 +57,7 @@ class ModelContainer:
 class Selfplay:
     def __init__(self, model_path, exp_name, char, models):
         self.timesteps = 18000
-        self.save_freq = self.timesteps * 100
+        self.save_freq = self.timesteps * 50
         self.char = char
         self.stage = "FINAL_DESTINATION"
         self.script_path = "./self_train.py"
@@ -96,6 +96,15 @@ class Selfplay:
         )
         self.run_command(cmd)
     
+    def can_release(self, new_model):
+        prev_model_path = random.choice(self.models.get(self.char))
+        wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
+        print(f"{self.char} wins: {wins} , loses {loses}")
+        if wins >= loses:
+            return True
+        else:
+            return False
+        
     def run_command(self, cmd):
         try:
             process = subprocess.Popen(
@@ -120,7 +129,97 @@ class Selfplay:
             print('An unexpected error occurred:', e)
         finally:
             print('Command finished.')
+    
+    def make_env(self, players, stage):
+        config = {
+                "iso_path": args.iso,
+                "stage": getattr(enums.Stage, stage),
+                "players": None,
+                "n_states": 864 if stage == "FINAL_DESTINATION" else 880,
+                "n_actions": 36, # 25
+                "save_replay": False
+            }
+        config["players"] = players
+        register(
+            id='myenv',
+            entry_point='basics.env:MultiMeleeEnv',
+            kwargs={'config': config},
+        )
+        return gym.make('myenv')
 
+    def match(self, p1_char, p1_model_path, p2_char, p2_model_path, stage):
+        players = [MyAgent(getattr(enums.Character, p1_char)), 
+                MyAgent(getattr(enums.Character, p2_char))]
+        env = self.make_env(players=players, stage=stage)
+        device = torch.device("cpu")
+
+        models_ppo = {}
+        models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
+
+        agent_ppo = PPOGRUAgent(models=models_ppo,
+                        observation_space=env.observation_space,
+                        action_space=env.action_space,
+                        device=device, 
+                        agent_id=1,
+                        platform=False if stage == "FINAL_DESTINATION" else True)
+        agent_ppo.load(p1_model_path)
+        agent_ppo.set_mode("eval")
+        agent_ppo.set_running_mode("eval")
+        agent_ppo.init()
+        
+        op_models_ppo = {}
+        op_models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        op_models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        op_ppo = PPOGRUAgent(models=op_models_ppo,
+                    observation_space=env.observation_space,
+                    action_space=env.action_space,
+                    device=device, 
+                    agent_id=2, 
+                    platform=False if stage == "FINAL_DESTINATION" else True)
+        op_ppo.load(p2_model_path)
+        op_ppo.set_mode("eval")
+        op_ppo.set_running_mode("eval")
+        op_ppo.init()
+        
+        state, info = env.reset()
+        done = False
+        while not done:
+            with torch.no_grad():
+                action, _ = agent_ppo.act(state, 1, 0)
+                op_action, _ = op_ppo.act(state, 1, 0)
+            next_state, reward, done, truncated, info = env.step((action, op_action))
+            state = next_state
+        env.close()
+        if state.player[1].stock > state.player[2].stock:
+            return 1
+        elif state.player[1].stock < state.player[2].stock:
+            return -1
+        else:
+            return 0
+        
+    def parallel_match(self, p1_char, p1_model_path, p2_char, p2_model_path, stage, parallel_num=10):
+        futures = []
+        for _ in range(10):
+            futures.append((self.match, p1_char, p1_model_path, p2_char, p2_model_path, stage))
+        with ProcessPoolExecutor(max_workers=parallel_num) as executor:
+            futures = [executor.submit(*x) for x in futures]
+        p1_wins = 0
+        p2_wins = 0
+        for future in futures:
+            try:
+                if future.result() == 1:        
+                    p1_wins += 1
+                elif future.result() == -1:
+                    p2_wins += 1
+            except Exception as e:
+                print(f"error ouccured: {e}")
+        return p1_wins, p2_wins
+        
 def kill_dolphin():
     # clear dolphin
     current_user = os.getlogin()
@@ -143,6 +242,10 @@ if __name__ == "__main__":
     for char in chars:    
         model_path = f"/home/tgkang/saved_model/against_cpu_FD/{char}_FD.pt"
         trainers[char] = Selfplay(model_path=model_path, exp_name=char, char=char, models=models)
+    # for char in chars:
+    #     s = trainers[char]
+    #     new_model = f"/home/tgkang2/Melee-PPO/scripts/{char}/checkpoints/recent_model.pt"
+    #     print(s.can_release(new_model))
     for i in range(MAX_NUMS):
         print("Iter: ", i)
         kill_dolphin()
@@ -162,5 +265,9 @@ if __name__ == "__main__":
                 if not s.init_timestep % s.save_freq == 0:
                     os.remove(new_model)
                 else:
+                    if not s.can_release(new_model):
+                        os.remove(new_model)
+                        continue
+                    print(f":::Release new agent: {new_model}")
                     s.models.push(char, new_model)
         kill_dolphin()
