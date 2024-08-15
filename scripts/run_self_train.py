@@ -57,7 +57,7 @@ class ModelContainer:
 class Selfplay:
     def __init__(self, model_path, exp_name, char, models):
         self.timesteps = 18000
-        self.save_freq = self.timesteps * 50
+        self.save_freq = self.timesteps * 100
         self.char = char
         self.stage = "FINAL_DESTINATION"
         self.script_path = "./self_train.py"
@@ -76,8 +76,10 @@ class Selfplay:
         self.models.push(self.char, os.path.join(self.save_dir, "agent_0.pt"))
         
     def run(self):
-        op_char = random.choice(list(self.models.models.keys()))
-        op_model = random.choice(self.models.get(op_char))
+        op1_char = self.char
+        op1_model = random.choice(self.models.get(op1_char))
+        op2_char = random.choice(list(self.models.models.keys()))
+        op2_model = random.choice(self.models.get(op2_char))
         cmd = (
             f"python {self.script_path} "
             f"--iso {args.iso} "
@@ -85,9 +87,11 @@ class Selfplay:
             f"--init_timestep {self.init_timestep} "
             f"--timesteps {self.timesteps} "
             f"--model_path {self.recent_model} "
-            f"--op_model_path {op_model} "
+            f"--op1_model_path {op1_model} "
+            f"--op2_model_path {op2_model} "
             f"--char {self.char} "
-            f"--op_char {op_char} "
+            f"--op1_char {op1_char} "
+            f"--op2_char {op2_char} "
             f"--stage {self.stage} "
         )
         self.run_command(cmd)
@@ -135,7 +139,7 @@ if __name__ == "__main__":
     models = ModelContainer()
     MAX_NUMS = 10000
     trainers = {}
-    chars = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
+    chars =["MARIO", "YOSHI", "LINK"] # ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
     for char in chars:    
         model_path = f"/home/tgkang/saved_model/against_cpu_FD/{char}_FD.pt"
         trainers[char] = Selfplay(model_path=model_path, exp_name=char, char=char, models=models)
@@ -143,17 +147,11 @@ if __name__ == "__main__":
         print("Iter: ", i)
         kill_dolphin()
         futures = []
-        for char in chars[:3]:
+        for char in chars:
             futures.append(trainers[char].run)
         with ProcessPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(x) for x in futures]
-        
         kill_dolphin()
-        futures = []
-        for char in chars[3:]:
-            futures.append(trainers[char].run)
-        with ProcessPoolExecutor(max_workers=3) as executor:
-            futures = [executor.submit(x) for x in futures]
         for char in chars:
             s = trainers[char]
             s.init_timestep += s.timesteps

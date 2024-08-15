@@ -45,13 +45,19 @@ parser.add_argument(
     "--model_path", default=None, type=str, help="Path to the saved model to be loaded for further training"
 )
 parser.add_argument(
-    "--op_model_path", default=None, type=str, help="opponent model path"
+    "--op1_model_path", default=None, type=str, help="opponent model path"
+)
+parser.add_argument(
+    "--op2_model_path", default=None, type=str, help="opponent model path"
 )
 parser.add_argument(
     "--char", default=None, type=str, help="Character to train"
 )
 parser.add_argument(
-    "--op_char", default=None, type=str, help="Opponent character"
+    "--op1_char", default=None, type=str, help="Opponent character"
+)
+parser.add_argument(
+    "--op2_char", default=None, type=str, help="Opponent character"
 )
 parser.add_argument(
     "--stage", default="FINAL_DESTINATION", type=str, help="stages to play"
@@ -61,16 +67,16 @@ args = parser.parse_args()
 
 iso_path = args.iso
 
-def make_env(id):
+def make_selfplay_env(op_char, op_model_path):
     players = [MyAgent(getattr(enums.Character, args.char)), 
-               MyAgent(getattr(enums.Character, args.op_char))]
+               MyAgent(getattr(enums.Character, op_char))]
     register(
-        id=id,
-        entry_point=f'basics.env:{id}',
+        id="SelfPlayMeleeEnv",
+        entry_point='basics.env:SelfPlayMeleeEnv',
         kwargs={'config': {
             "iso_path": iso_path,
             "players": players,
-            "actor_model": args.op_model_path,
+            "actor_model": op_model_path,
             "agent_id": 1, # for 1p,
             "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
             "n_actions": 36,
@@ -78,14 +84,31 @@ def make_env(id):
             "stage": getattr(enums.Stage, args.stage),
         }},
     )
-    return gym.make(id)
+    return gym.make("SelfPlayMeleeEnv")
 
-id = "SelfPlayMeleeEnv"
+def make_cpu_env(cpu_lvl):
+    candidates = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
+    players = [MyAgent(getattr(enums.Character, args.char)), 
+               CPU(getattr(enums.Character, random.choice(candidates)), cpu_lvl)]
+    register(
+        id="CPUMeleeEnv",
+        entry_point='basics.env:CPUMeleeEnv',
+        kwargs={'config': {
+            "iso_path": iso_path,
+            "players": players,
+            "agent_id": 1, # for 1p,
+            "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
+            "n_actions": 36,
+            "save_replay": False,
+            "stage": getattr(enums.Stage, args.stage),
+        }},
+    )
+    return gym.make("CPUMeleeEnv")
+
 env = gym.vector.AsyncVectorEnv([
-    lambda: make_env(id),
-    lambda: make_env(id),
-    lambda: make_env(id),
-    lambda: make_env(id)
+    lambda: make_cpu_env(cpu_lvl=7),
+    lambda: make_selfplay_env(args.op1_char, args.op1_model_path),
+    lambda: make_selfplay_env(args.op2_char, args.op2_model_path),
 ])
 env = wrap_env(env, wrapper="gymnasium")
 device = env.device
