@@ -114,7 +114,7 @@ class Selfplay:
                 stderr=subprocess.PIPE,
                 text=True
             )
-            stdout, stderr = process.communicate(timeout=60 * 6)
+            stdout, stderr = process.communicate(timeout=60 * 5)
             return_code = process.returncode
 
             if return_code != 0:
@@ -240,8 +240,8 @@ if __name__ == "__main__":
     trainers = {}
     chars =["MARIO", "YOSHI", "LINK"] # ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
     for char in chars:    
-        model_path = f"/home/tgkang/saved_model/against_cpu_FD/{char}_FD.pt"
-        trainers[char] = Selfplay(model_path=model_path, exp_name=char, char=char, models=models)
+        model_path = f"/home/tgkang/against_cpu_FD/{char}_FD.pt"
+        trainers[char] = Selfplay(model_path=model_path, exp_name=f"./Selfplay/{char}", char=char, models=models)
     # for char in chars:
     #     s = trainers[char]
     #     new_model = f"/home/tgkang2/Melee-PPO/scripts/{char}/checkpoints/recent_model.pt"
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         for char in chars:
             s = trainers[char]
             s.init_timestep += s.timesteps
-            exp_dir = os.path.join('.',s.exp_name)
+            exp_dir = os.path.join('.', s.exp_name)
             new_model = os.path.join(exp_dir,"checkpoints",f"agent_{s.init_timestep}.pt")
             if os.path.exists(new_model):
                 shutil.copy2(new_model, s.recent_model)

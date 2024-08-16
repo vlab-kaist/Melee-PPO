@@ -106,8 +106,10 @@ def make_cpu_env(cpu_lvl):
     return gym.make("CPUMeleeEnv")
 
 env = gym.vector.AsyncVectorEnv([
+    # lambda: make_cpu_env(cpu_lvl=3),
+    lambda: make_cpu_env(cpu_lvl=5),
     lambda: make_cpu_env(cpu_lvl=7),
-    lambda: make_selfplay_env(args.op1_char, args.op1_model_path),
+    #lambda: make_selfplay_env(args.op1_char, args.op1_model_path),
     lambda: make_selfplay_env(args.op2_char, args.op2_model_path),
 ])
 env = wrap_env(env, wrapper="gymnasium")
@@ -134,7 +136,7 @@ cfg_ppo["grad_norm_clip"] = 1.0
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False
-cfg_ppo["entropy_loss_scale"] = 0.01
+cfg_ppo["entropy_loss_scale"] = 0.005 # 0.01
 cfg_ppo["value_loss_scale"] = 0.5
 cfg_ppo["kl_threshold"] = 0
 cfg_ppo["value_preprocessor"] = RunningStandardScaler
