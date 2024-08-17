@@ -97,10 +97,10 @@ class Selfplay:
         self.run_command(cmd)
     
     def can_release(self, new_model):
-        prev_model_path = random.choice(self.models.get(self.char))
+        prev_model_path = os.path.join(self.save_dir, "agent_0.pt") #random.choice(self.models.get(self.char))
         wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
         print(f"{self.char} wins: {wins} , loses {loses}")
-        if wins >= loses:
+        if wins > loses:
             return True
         else:
             return False
@@ -238,10 +238,10 @@ if __name__ == "__main__":
     models = ModelContainer()
     MAX_NUMS = 10000
     trainers = {}
-    chars =["MARIO", "YOSHI", "LINK"] # ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
+    chars =["LUIGI", "LINK", "PIKACHU"] # ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
     for char in chars:    
         model_path = f"/home/tgkang/against_cpu_FD/{char}_FD.pt"
-        trainers[char] = Selfplay(model_path=model_path, exp_name=f"./Selfplay/{char}", char=char, models=models)
+        trainers[char] = Selfplay(model_path=model_path, exp_name=f"./Selfplay2/{char}", char=char, models=models)
     # for char in chars:
     #     s = trainers[char]
     #     new_model = f"/home/tgkang2/Melee-PPO/scripts/{char}/checkpoints/recent_model.pt"

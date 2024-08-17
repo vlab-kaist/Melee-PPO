@@ -106,10 +106,8 @@ def make_cpu_env(cpu_lvl):
     return gym.make("CPUMeleeEnv")
 
 env = gym.vector.AsyncVectorEnv([
-    # lambda: make_cpu_env(cpu_lvl=3),
-    lambda: make_cpu_env(cpu_lvl=5),
-    lambda: make_cpu_env(cpu_lvl=7),
-    #lambda: make_selfplay_env(args.op1_char, args.op1_model_path),
+    lambda: make_cpu_env(cpu_lvl=9),
+    lambda: make_selfplay_env(args.op1_char, args.op1_model_path),
     lambda: make_selfplay_env(args.op2_char, args.op2_model_path),
 ])
 env = wrap_env(env, wrapper="gymnasium")
@@ -125,14 +123,14 @@ models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, 
 
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["rollouts"] = 1024  # memory_size
-cfg_ppo["learning_epochs"] = 10
+cfg_ppo["learning_epochs"] = 8 # 10
 cfg_ppo["mini_batches"] = 8
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.95
-cfg_ppo["learning_rate"] = 1e-5  # Lower the learning rate
-cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
-cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
-cfg_ppo["grad_norm_clip"] = 1.0
+cfg_ppo["learning_rate"] = 1e-5
+# cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
+# cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
+cfg_ppo["grad_norm_clip"] = 0.5 # 1.0
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False

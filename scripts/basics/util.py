@@ -63,7 +63,7 @@ class ObservationSpace:
             p1_shield_dmg = max(p1_shield_dmg, 0)
             p2_shield_dmg = max(p2_shield_dmg, 0)
 
-            w_dmg, w_shield, w_stock = 0.2, 0.3, 6
+            w_dmg, w_shield, w_stock = 0.01, 0, 1 #0.2, 0.3, 6
             p1_loss = (
                 w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
             )
@@ -151,7 +151,7 @@ class PlatformObservationSpace:
             p1_shield_dmg = max(p1_shield_dmg, 0)
             p2_shield_dmg = max(p2_shield_dmg, 0)
 
-            w_dmg, w_shield, w_stock = 0.2, 0.3, 6
+            w_dmg, w_shield, w_stock = 0.01, 0, 1 #0.2, 0.3, 6
             p1_loss = (
                 w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
             )
