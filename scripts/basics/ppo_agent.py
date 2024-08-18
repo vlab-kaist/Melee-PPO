@@ -142,15 +142,15 @@ class PPOGRUAgent(PPO_RNN):
         edge_diff= abs(ai.position.x) - edge_pos
         
         # impossible hook recovery
-        if (ai.facing and is_left) or ((not ai.facing) and not is_left):
+        if ((not ai.facing) and is_left) or (ai.facing and (not is_left)):
             if ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
-                self.macro_queue = [2]if is_left else [1]
+                self.macro_queue = [2] if is_left else [1]
             elif ai.jumps_left > 0: #jump
                 self.macro_queue = [21] if is_left else [20]
             elif(ai.position.y < -50): #b special
                 self.macro_queue = [14] if is_left else [13]
             else:
-                self.macro_queue = [2]if is_left else [1]
+                self.macro_queue = [2] if is_left else [1]
         elif ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
     Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
             self.macro_queue = [19, 0] # use L key
@@ -251,14 +251,13 @@ class PPOGRUAgent(PPO_RNN):
         if edge_diff < 35: # prevent to jump
             prob[0][23 if is_left else 24] = 0
             prob[0][20 if is_left else 21] = 0
-        
-        # TODO: need to verify distance or separate each mask                
-        if edge_diff < 25:
+                     
+        if edge_diff < 32 and ai.position.y > float(1e-04):
             # prevent dodge or attack while jump
+            prob[0][6 if is_left else 7] = 0
+            prob[0][34 if is_left else 35] = 0
+        if edge_diff < 25:
             prob[0][1 if is_left else 2] = 0
-            if ai.position.y > float(1e-04):
-                prob[0][6 if is_left else 7] = 0
-                prob[0][34 if is_left else 35] = 0
                         
         if ai.character in [Character.MARIO, Character.DOC]:
             prob = self.mario_mask(prob)
