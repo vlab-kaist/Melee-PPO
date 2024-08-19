@@ -36,15 +36,17 @@ from power_test import Powertest
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
+    "--iso", default="/home/tgkang2/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 args = parser.parse_args()
 
 class Player:
-    def __init__(self, char=None, model_path=None, id=None):
+    def __init__(self, char=None, model_path=None, cpu_lvl=None, id=None):
         self.id = id
         self.char = char
+        self.agent_type = "AI" if model_path is not None else "CPU"
         self.model_path = model_path
+        self.cpu_lvl = cpu_lvl
         self.wins = {} # dict
 
 def make_env(players, stage):
@@ -79,7 +81,7 @@ def kill_dolphin():
         
 def match(p1, p2, stage):
     players = [MyAgent(getattr(enums.Character, p1.char)), 
-            MyAgent(getattr(enums.Character, p2.char))]
+            MyAgent(getattr(enums.Character, p2.char)) if p2.agent_type == "AI" else CPU(getattr(enums.Character, p2.char), p2.cpu_lvl)]
     env = make_env(players=players, stage=stage)
     device = torch.device("cpu")
 
@@ -100,32 +102,36 @@ def match(p1, p2, stage):
     agent_ppo.set_running_mode("eval")
     agent_ppo.init()
     
-    op_models_ppo = {}
-    op_models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
-                                    num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-    op_models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
-                                    num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
-    op_ppo = PPOGRUAgent(models=op_models_ppo,
-                observation_space=env.observation_space,
-                action_space=env.action_space,
-                device=device, 
-                agent_id=2, 
-                platform=False if stage == "FINAL_DESTINATION" else True)
-    op_ppo.load(p2.model_path)
-    op_ppo.set_mode("eval")
-    op_ppo.set_running_mode("eval")
-    op_ppo.init()
+    if p2.agent_type == "AI":
+        op_models_ppo = {}
+        op_models_ppo["policy"] = GRUPolicy(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        op_models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
+                                        num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
+        op_ppo = PPOGRUAgent(models=op_models_ppo,
+                    observation_space=env.observation_space,
+                    action_space=env.action_space,
+                    device=device, 
+                    agent_id=2, 
+                    platform=False if stage == "FINAL_DESTINATION" else True)
+        op_ppo.load(p2.model_path)
+        op_ppo.set_mode("eval")
+        op_ppo.set_running_mode("eval")
+        op_ppo.init()
     
     state, info = env.reset()
     done = False
     while not done:
         with torch.no_grad():
             action, _ = agent_ppo.act(state, 1, 0)
-            op_action, _ = op_ppo.act(state, 1, 0)
+            if p2.agent_type == "AI":
+                op_action, _ = op_ppo.act(state, 1, 0)
+            else:
+                op_action = 0
         next_state, reward, done, truncated, info = env.step((action, op_action))
         state = next_state
     env.close()
-    print(state.player[1].stock, state.player[2].stock)
+
     if state.player[1].stock > state.player[2].stock:
         return 1
     elif state.player[1].stock < state.player[2].stock:
@@ -133,9 +139,9 @@ def match(p1, p2, stage):
     else:
         return 0
 
-def parallel_match(p1, p2, stage, parallel_num=10):
+def parallel_match(p1, p2, stage, parallel_num=1):
     futures = []
-    for _ in range(20):
+    for _ in range(10):
         futures.append((match, p1, p2, stage))
     with ProcessPoolExecutor(max_workers=parallel_num) as executor:
         futures = [executor.submit(*x) for x in futures]
@@ -149,18 +155,23 @@ def parallel_match(p1, p2, stage, parallel_num=10):
                 p2.wins[p1.id] += 1
         except Exception as e:
             print(f"error ouccured: {e}")
-    print(f"{p1.char} vs {p2.char} {p1.wins[p2.id]}:{p2.wins[p1.id]}")
+    print(f"{p1.id} vs {p2.id} {p1.wins[p2.id]}:{p2.wins[p1.id]}")
         
-characters = ["DOC", "LINK", "LUIGI", "MARIO", "PIKACHU", "YOSHI"]
-agents = []
-for i, char in enumerate(characters):
-    model_path = f"/home/tgkang/saved_model/against_cpu_FD/{char}_FD.pt"
-    agent = Player(char=char, model_path=model_path, id=i)
-    agents.append(agent)
-
+#characters = ["DOC", "LINK", "LUIGI", "MARIO", "PIKACHU", "YOSHI"]
+agents = [
+    Player(char="LINK", cpu_lvl=9, id=0),
+    Player(char="LINK", model_path="/home/tgkang/Melee-PPO/scripts/Selfplay2/LINK/checkpoints/agent_0.pt", id=1),
+    Player(char="LINK", model_path="/home/tgkang/Melee-PPO/scripts/Selfplay2/LINK/checkpoints/agent_5400000.pt", id=2),
+    Player(char="LINK", model_path="/home/tgkang/Melee-PPO/scripts/Selfplay2/LINK/checkpoints/agent_11700000.pt", id=3),
+]
 for i in range(len(agents)):
     for j in range(i + 1, len(agents)):
-        parallel_match(agents[j], agents[i], stage="FINAL_DESTINATION")
+        if agents[i].agent_type == "CPU":
+            if agents[j].agent_type == "CPU":
+                continue 
+            parallel_match(agents[j], agents[i], stage="FINAL_DESTINATION")
+        else:
+            parallel_match(agents[i], agents[j], stage="FINAL_DESTINATION")
         kill_dolphin()
 
 win_matrix = np.zeros((len(agents), len(agents)), dtype=int)
@@ -170,31 +181,16 @@ for agent in agents:
 print("Win Matrix:")
 print(win_matrix)
 
-# plot win matrix
+for agent in agents:
+    if agent.agent_type == "AI":
+        print(f"{agent.id}: {agent.char}, {agent.model_path}")
+    else:
+        print(f"{agent.id}: {agent.char}, CPU Level {agent.cpu_lvl}")
+# visuallize win martix
 plt.figure(figsize=(10, 8))
-sns.heatmap(win_matrix, annot=True, fmt="d", cmap="coolwarm", xticklabels=characters, yticklabels=characters, cbar=True)
+sns.heatmap(win_matrix, annot=True, fmt="d", cmap="coolwarm", xticklabels=[f'{id}' for id in range(len(agents))], yticklabels=[f'{id}' for id in range(len(agents))], cbar=True)
 plt.title("Win Matrix")
 plt.xlabel("Opponent")
 plt.ylabel("Player")
-plt.savefig('win_matrix.png')
+plt.savefig('win_matrix.png', bbox_inches='tight')
 plt.close()
-
-
-#make helpful stats
-total_matches = win_matrix + win_matrix.T  # Sum of wins and losses for each matchup
-win_rate = np.sum(win_matrix, axis=1) / np.sum(total_matches, axis=1)
-
-# 2. Average Margin of Victory
-margin_of_victory = (win_matrix - win_matrix.T) / total_matches
-average_margin_of_victory = np.nanmean(margin_of_victory, axis=1)  # Ignore NaNs resulting from division by zero
-
-# 3. Head-to-Head Advantage
-head_to_head_advantage = np.sum(win_matrix > win_matrix.T, axis=1) - np.sum(win_matrix < win_matrix.T, axis=1)
-
-# Outputting the results
-for i, char in enumerate(characters):
-    print(f"{char}:")
-    print(f"  Win Rate: {win_rate[i]:.2%}")
-    print(f"  Average Margin of Victory: {average_margin_of_victory[i]:.2f}")
-    print(f"  Head-to-Head Advantage: {head_to_head_advantage[i]}")
-    print()
