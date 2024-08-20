@@ -234,37 +234,52 @@ class ActionSpace:
         
     def sample(self):
         return np.random.choice(self.size)
+    
+    def to_controller(self, action):
+        x, y, button = self.action_space[action]
+        
+        state = [False, False, False, False, False, 0.0, 0.0, 0.0, 0.0, 0.0]
+        if button == 1.0: state[0] = True # A
+        if button == 2.0: state[1] = True # B
+        if button == 3.0: state[4] = True # Z
+        if button == 4.0: state[9] = 1.0 # digital R(L)
+        if button == 5.0: state[3] = True # Y
+        
+        if button == 6.0:
+            state[7], state[8] = x, y # c stick
+        else:
+            state[5], state[6] = x, y
+        return state
 
-    def __call__(self, action):
-        return ControlState(self.action_space[action])
-
-class ControlState: # need to change
+    def __call__(self, action, direct=False):
+        if direct: # when action is a list of [A, B, X, Y, Z, main x, main y, cx, cy, R]
+            return ControlState(action)
+        # when action is index of action space
+        return ControlState(self.to_controller(action))
+    
+class ControlState:
     def __init__(self, state):
+        # [A, B, X, Y, Z, main x, main y, cx, cy, R]
         self.state = state
         self.buttons = [
-            False, #0
-            melee.enums.Button.BUTTON_A, #1
-            melee.enums.Button.BUTTON_B, #2
-            melee.enums.Button.BUTTON_Z, #3
-            melee.enums.Button.BUTTON_L, #4
-            melee.enums.Button.BUTTON_Y, #5
-            melee.enums.Button.BUTTON_C #6
-            ]
-        
+            melee.enums.Button.BUTTON_A,
+            melee.enums.Button.BUTTON_B,
+            melee.enums.Button.BUTTON_X,
+            melee.enums.Button.BUTTON_Y,
+            melee.enums.Button.BUTTON_Z
+        ]
+
     def __call__(self, controller):
-        controller.release_all()      
-        if self.state[2]:
-            if self.state[2] == 4.0:
-                #controller.press_shoulder(melee.enums.Button.BUTTON_L, 1.0)
-                controller.press_button(melee.Button.BUTTON_L)
-            elif self.state[2] == 6.0:
-                controller.tilt_analog_unit(melee.enums.Button.BUTTON_C, 
-                                    self.state[0], self.state[1])
-            else: 
-                controller.press_button(self.buttons[int(self.state[2])])
-        if self.state[2] != 6.0:
-            controller.tilt_analog_unit(melee.enums.Button.BUTTON_MAIN, 
-                                        self.state[0], self.state[1])
+        controller.release_all()
+        for i in range(5):
+            if self.state[i]:
+                controller.press_button(self.buttons[i])
+        controller.tilt_analog_unit(melee.enums.Button.BUTTON_MAIN,
+                                    self.state[5], self.state[6])
+        controller.tilt_analog_unit(melee.enums.Button.BUTTON_C,
+                                self.state[7], self.state[8])
+
+        controller.press_shoulder(melee.enums.Button.BUTTON_R, self.state[9])
         
 def state_preprocess(gamestate, agent_id, platform=False):
     proj_mapping = {
