@@ -80,8 +80,6 @@ id = "CPUMeleeEnv"
 env = gym.vector.AsyncVectorEnv([
     #lambda: make_env(id, 1),
     #lambda: make_env(id, 2),
-    lambda: make_env(id, 3),
-    #lambda: make_env(id, 4),
     lambda: make_env(id, 5),
     #lambda: make_env(id, 6),
     lambda: make_env(id, 7),
@@ -138,9 +136,10 @@ if args.model_path is not None:
     agent_ppo.load(args.model_path)
 
 agent_ppo.experiment_dir = args.save_dir
-cfg_trainer = {"timesteps": args.timesteps, "headless": True}
+cfg_trainer = {"timesteps": args.timesteps, "headless": True, "disable_progressbar": True}
 trainer = ParallelTrainer(cfg=cfg_trainer, env=env, agents=agent_ppo)
 trainer.initial_timestep = args.init_timestep
 trainer.timesteps += args.init_timestep
 
 trainer.train() 
+env.close()

@@ -18,7 +18,7 @@ def parse_nvidia_smi_output(output):
             processes.append((pid, memory))
     return processes
 
-def terminate_large_processes(processes, n_keep=3, min_memory=600):
+def terminate_large_processes(processes, n_keep=0, min_memory=600):
     # Sort processes by PID in descending order and filter by memory usage
     sorted_processes = sorted(processes, key=lambda x: x[0], reverse=True)
     

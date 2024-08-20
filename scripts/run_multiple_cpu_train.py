@@ -11,6 +11,7 @@ import csv
 import random
 import subprocess
 from collections import deque
+import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -66,7 +67,7 @@ class AgainstCPU:
                 stderr=subprocess.PIPE,
                 text=True
             )
-            stdout, stderr = process.communicate(timeout=60 * 5)
+            stdout, stderr = process.communicate(timeout=60 * 6)
             return_code = process.returncode
 
             if return_code != 0:
@@ -101,27 +102,38 @@ if __name__ == "__main__":
     MAX_NUMS = 10000
     trainers = {}
     stage = "BATTLEFIELD"
-    chars = ["LINK", "MARIO", "LUIGI"] # "PIKACHU", "LINK"]
+    chars = ["LINK", "MARIO", "LUIGI", "PIKACHU", "YOSHI"] # "PIKACHU", "LINK"]
     for char in chars:    
         trainers[char] = AgainstCPU(exp_name=f"./AgainstCPU/{char}", char=char, stage=stage)
     
     # for the first time
     kill_dolphin()
+    os.system('python kill.py')
     futures = []
     for char in chars:
         futures.append((trainers[char].run, True))
-    with ProcessPoolExecutor(max_workers=3) as executor:
+    with ProcessPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(*x) for x in futures]
+    for char in chars:
+        s = trainers[char]
+        s.init_timestep += s.timesteps
+        exp_dir = os.path.join('.', s.exp_name)
+        new_model = os.path.join(exp_dir,"checkpoints",f"agent_{s.init_timestep}.pt")
+        if os.path.exists(new_model):
+            shutil.copy2(new_model, s.recent_model)
+            if not s.init_timestep % s.save_freq == 0:
+                os.remove(new_model)
     kill_dolphin()
     
     # after first time
     for i in range(1, MAX_NUMS):
+        os.system('python kill.py')
         print("Iter: ", i)
         kill_dolphin()
         futures = []
         for char in chars:
             futures.append((trainers[char].run, False))
-        with ProcessPoolExecutor(max_workers=3) as executor:
+        with ProcessPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(*x) for x in futures]
         kill_dolphin()
         for char in chars:
