@@ -78,13 +78,7 @@ def make_env(id, cpu_lvl):
 
 id = "CPUMeleeEnv"
 env = gym.vector.AsyncVectorEnv([
-    #lambda: make_env(id, 1),
-    #lambda: make_env(id, 2),
-    lambda: make_env(id, 5),
-    #lambda: make_env(id, 6),
-    lambda: make_env(id, 7),
-    #lambda: make_env(id, 8),
-    lambda: make_env(id, 9)
+    lambda: make_env(id, d) for d in random.sample([5, 7, 9], 2)
 ])
 env = wrap_env(env, wrapper="gymnasium")
 device = env.device
