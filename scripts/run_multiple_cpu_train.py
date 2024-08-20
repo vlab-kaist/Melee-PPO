@@ -101,7 +101,7 @@ if __name__ == "__main__":
     MAX_NUMS = 10000
     trainers = {}
     stage = "BATTLEFIELD"
-    chars = ["MARIO", "YOSHI", "LUIGI"] # "PIKACHU", "LINK"]
+    chars = ["LINK", "MARIO", "YOSHI"] # "PIKACHU", "LINK"]
     for char in chars:    
         trainers[char] = AgainstCPU(exp_name=f"./AgainstCPU/{char}", char=char, stage=stage)
     
@@ -120,9 +120,9 @@ if __name__ == "__main__":
         kill_dolphin()
         futures = []
         for char in chars:
-            futures.append(trainers[char].run)
+            futures.append(trainers[char].run, False)
         with ProcessPoolExecutor(max_workers=3) as executor:
-            futures = [executor.submit(x) for x in futures]
+            futures = [executor.submit(*x) for x in futures]
         kill_dolphin()
         for char in chars:
             s = trainers[char]
