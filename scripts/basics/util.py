@@ -251,8 +251,8 @@ class ActionSpace:
             state[5], state[6] = x, y
         return state
 
-    def __call__(self, action, direct=False):
-        if direct: # when action is a list of [A, B, X, Y, Z, main x, main y, cx, cy, R]
+    def __call__(self, action):
+        if (not isinstance(action, int)) and len(action) == 10: # when action is a list of [A, B, X, Y, Z, main x, main y, cx, cy, R]
             return ControlState(action)
         # when action is index of action space
         return ControlState(self.to_controller(action))
