@@ -238,28 +238,29 @@ class ActionSpace:
     def to_controller(self, action):
         x, y, button = self.action_space[action]
         
-        state = [False, False, False, False, False, 0.0, 0.0, 0.0, 0.0, 0.0]
+        state = [False, False, False, False, False, False, 0.0, 0.0, 0.0, 0.0, 0.0]
         if button == 1.0: state[0] = True # A
         if button == 2.0: state[1] = True # B
         if button == 3.0: state[4] = True # Z
-        if button == 4.0: state[9] = 1.0 # digital R(L)
+        if button == 4.0: state[5] = True # Digital R
         if button == 5.0: state[3] = True # Y
         
         if button == 6.0:
-            state[7], state[8] = x, y # c stick
+            state[8], state[9] = x, y # c stick
         else:
-            state[5], state[6] = x, y
+            state[6], state[7] = x, y
         return state
 
     def __call__(self, action):
-        if (not isinstance(action, int)) and len(action) == 10: # when action is a list of [A, B, X, Y, Z, main x, main y, cx, cy, R]
+        if (not isinstance(action, int)) and len(action) == 11: # when action is a list of [A, B, X, Y, Z, main x, main y, cx, cy, R]
             return ControlState(action)
         # when action is index of action space
         return ControlState(self.to_controller(action))
     
 class ControlState:
     def __init__(self, state):
-        # [A, B, X, Y, Z, main x, main y, cx, cy, R]
+        # state: [A, B, X, Y, Z, digital R, main x, main y, c stick x, c stick y, R]
+        # range of state => idx 0~5: bool, 6~9: -1~1 float, 10: 0~1 flaot
         self.state = state
         self.buttons = [
             melee.enums.Button.BUTTON_A,
@@ -275,12 +276,14 @@ class ControlState:
             if self.state[i]:
                 controller.press_button(self.buttons[i])
         controller.tilt_analog_unit(melee.enums.Button.BUTTON_MAIN,
-                                    self.state[5], self.state[6])
+                                    self.state[6], self.state[7])
         controller.tilt_analog_unit(melee.enums.Button.BUTTON_C,
-                                self.state[7], self.state[8])
-
-        controller.press_shoulder(melee.enums.Button.BUTTON_R, self.state[9])
-        
+                                self.state[8], self.state[9])
+        if self.state[5]:
+            controller.press_button(melee.Button.BUTTON_R)
+        else:
+            controller.press_shoulder(melee.enums.Button.BUTTON_R, self.state[10])
+                   
 def state_preprocess(gamestate, agent_id, platform=False):
     proj_mapping = {
             enums.ProjectileType.MARIO_FIREBALL: 0,
