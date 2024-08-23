@@ -10,21 +10,21 @@ class SDI():
         """Converts an angle to the nearest cardinal direction (8 directions)."""
         angle %= 360
         if angle <= 22.5 or angle > 337.5:
-            return 1, 0.5
+            return 1, 0
         if 22.5 < angle <= 67.5:
             return 1, 1
         if 67.5 < angle <= 112.5:
-            return 0.5, 1
-        if 112.5 < angle <= 157.5:
             return 0, 1
+        if 112.5 < angle <= 157.5:
+            return -1, 1
         if 157.5 < angle <= 202.5:
-            return 0, 0.5
+            return -1, 0
         if 202.5 < angle <= 247.5:
-            return 0, 0
+            return -1, -1
         if 247.5 < angle <= 292.5:
-            return 0.5, 0
+            return 0, -1
         if 292.5 < angle <= 337.5:
-            return 1, 0
+            return 1, -1
 
         return 1, 1  # Default case (shouldn't happen)
 
@@ -32,14 +32,14 @@ class SDI():
     def cardinal_left(direction):
         """Returns the cardinal direction to the left of the given direction."""
         directions = {
-            (1, 0.5): (1, 1),
-            (1, 1): (0.5, 1),
-            (0.5, 1): (0, 1),
-            (0, 1): (0, 0.5),
-            (0, 0.5): (0, 0),
-            (0, 0): (0.5, 0),
-            (0.5, 0): (1, 0),
-            (1, 0): (1, 0.5)
+            (1, 0): (1, 1),
+            (1, 1): (0, 1),
+            (0, 1): (-1, 1),
+            (-1, 1): (-1, 0),
+            (-1, 0): (-1, -1),
+            (-1, -1): (0, -1),
+            (0, -1): (1, -1),
+            (1, -1): (1, 0)
         }
         return directions.get(direction, (1, 1))
 
@@ -60,8 +60,7 @@ class SDI():
     
     @staticmethod
     def analog_input_to_action(x, y):
-        normalized_x, normalized_y = 2*x - 1, 2*y - 1
-        return [False, False, False, False, False, normalized_x, normalized_y, 0.0, 0.0, 0.0]
+        return [False, False, False, False, False, x, y, 0.0, 0.0, 0.0]
 
     @staticmethod
     def touching_ground(state):
@@ -94,11 +93,11 @@ class SDI():
     def handle_committed_sdi(self, gamestate, smashbot_state):
         print("Notes", "Committed SDI cardinal: " + str(self.cardinal_direction))
         if SDI.touching_ground(smashbot_state):
-            if self.cardinal_direction[1] == 0.5:
+            if self.cardinal_direction[1] == 0:
                 if gamestate.frame % 2:
-                    return (0.5, 0.5)
+                    return (0, 0)
                 else:
-                    return (self.cardinal_direction[0], 0.5)
+                    return (self.cardinal_direction[0], 0)
 
         if gamestate.frame % 2:
             x, y = SDI.cardinal_right(self.cardinal_direction)
@@ -140,15 +139,15 @@ class SDI():
 
             if smashbot_state.on_ground:
                 if angle < 90 or angle > 270:
-                    self.cardinal_direction = (1, 0.5)
+                    self.cardinal_direction = (1, 0)
                 else:
-                    self.cardinal_direction = (0, 0.5)
+                    self.cardinal_direction = (-1, 0)
 
             if SDI.touching_ground(smashbot_state):
-                if self.cardinal_direction[1] == 0:
-                    self.cardinal_direction = (self.cardinal_direction[0], 0.5)
-                    if self.cardinal_direction[0] == 0.5:
-                        self.cardinal_direction = (1, 0.5)
+                if self.cardinal_direction[1] == -1:
+                    self.cardinal_direction = (self.cardinal_direction[0], 0)
+                    if self.cardinal_direction[0] == 0:
+                        self.cardinal_direction = (1, 0)
 
         if gamestate.frame % 2:
             x, y = SDI.cardinal_right(self.cardinal_direction)
@@ -165,21 +164,21 @@ class SDI():
 
         if smashbot_state.on_ground:
             if angle < 90 or angle > 270:
-                self.cardinal_direction = (1, 0.5)
+                self.cardinal_direction = (1, 0)
             else:
-                self.cardinal_direction = (0, 0.5)
+                self.cardinal_direction = (-1, 0)
 
         if SDI.touching_ground(smashbot_state):
-            if self.cardinal_direction[1] == 0:
-                self.cardinal_direction = (self.cardinal_direction[0], 0.5)
-                if self.cardinal_direction[0] == 0.5:
-                    self.cardinal_direction = (1, 0.5)
+            if self.cardinal_direction[1] == -1:
+                self.cardinal_direction = (self.cardinal_direction[0], 0)
+                if self.cardinal_direction[0] == 0:
+                    self.cardinal_direction = (1, 0)
 
-        if self.cardinal_direction[1] == 0.5:
+        if self.cardinal_direction[1] == 0:
             if gamestate.frame % 2:
-                return (0.5, 0.5)
+                return (0, 0)
             else:
-                return (self.cardinal_direction[0], 0.5)
+                return (self.cardinal_direction[0], 0)
 
         if gamestate.frame % 2:
             x, y = SDI.cardinal_right(self.cardinal_direction)
