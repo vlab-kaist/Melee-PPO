@@ -38,7 +38,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
-parser.add_argument("--stage", defualt=None, type=str, help="BATTLEFIELD, FINAL_DESTINATION, POKEMON_STADIUM")
+parser.add_argument("--stage", default=None, type=str, help="BATTLEFIELD, FINAL_DESTINATION, POKEMON_STADIUM")
 args = parser.parse_args()
 
 class ModelContainer:
