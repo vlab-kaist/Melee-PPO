@@ -355,13 +355,14 @@ def state_preprocess(gamestate, agent_id, platform=False):
             enums.ProjectileType.DR_MARIO_CAPSULE: 1,
             enums.ProjectileType.LINK_BOMB: 2,
             enums.ProjectileType.LINK_HOOKSHOT: 3,
-            enums.ProjectileType.LINK_ARROW: 4,
+            enums.ProjectileType.ARROW: 4, #LINK ARROW
             enums.ProjectileType.PIKACHU_THUNDER: 5,
             enums.ProjectileType.MARIO_CAPE: 6,
             enums.ProjectileType.DR_MARIO_CAPE: 7,
             enums.ProjectileType.YOSHI_EGG_THROWN: 8,
             enums.ProjectileType.YOSHI_TONGUE: 9,
-            enums.ProjectileType.YOSHI_STAR: 10,
+            enums.ProjectileType.LINK_BOOMERANG: 10,
+            #enums.ProjectileType.YOSHI_STAR: 10,
             enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
             enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
             enums.ProjectileType.LUIGI_FIRE: 13
