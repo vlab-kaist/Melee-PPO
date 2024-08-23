@@ -10,7 +10,8 @@ from melee import enums
 from melee.enums import Action, Character, Button
 import numpy as np
 from enum import Enum       
-        
+from heuristics.sdi import SDI
+
 class PPOGRUAgent(PPO_RNN):
     def __init__(self, agent_id=1, players=None, csv_path=None,
                  is_selfplay=False, platform=False, delay=3, tou=0.5, *args, **kwargs):
@@ -33,6 +34,7 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_idx = 0
         self.side_b = False # for mario
         self.cyclone = False # for mario and luigi
+        self.sdi = None
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -42,7 +44,8 @@ class PPOGRUAgent(PPO_RNN):
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         if isinstance(self.gamestate, melee.gamestate.GameState):
             ai = self.gamestate.players[self.agent_id]
-                        
+            if ai.hitlag_left <= 1:
+                self.sdi = None
             if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH) or ai.action.value <= 10: # cyclone is charged when down b occurs on ground
                 self.cyclone = False
             if ai.on_ground or not ai.off_stage:
@@ -51,6 +54,13 @@ class PPOGRUAgent(PPO_RNN):
                 self.macro_mode = False
                 self.macro_queue = []
                 self.macro_idx = 0
+            elif ai.hitlag_left > 1:
+                op = self.gamestate.players[3 - self.agent_id]
+                if self.sdi is None:
+                    self.sdi = SDI()
+                self.action = self.sdi.get_action(self.gamestate, ai, op)
+                print(str(self.action)+ "\n")
+                return self.action, self._current_log_prob
             elif (not self.macro_mode) and ai.off_stage:
                 if ai.character in [Character.MARIO, Character.DOC]:
                     self.mario_recovery()
@@ -95,6 +105,7 @@ class PPOGRUAgent(PPO_RNN):
                 self.action_cnt += 1
             self.prev = self.action
             return self.action, self._current_log_prob
+            # return 0, self._current_log_prob
             #return torch.tensor(0).unsqueeze(0) if self.agent_id == 1 else self.action, self._current_log_prob
     
     def state_preprocess(self, gamestate):
