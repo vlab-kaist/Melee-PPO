@@ -38,6 +38,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
+parser.add_argument("--stage", defualt=None, type=str, help="BATTLEFIELD, FINAL_DESTINATION, POKEMON_STADIUM")
 args = parser.parse_args()
 
 class ModelContainer:
@@ -59,7 +60,7 @@ class Selfplay:
         self.timesteps = 18000
         self.save_freq = self.timesteps * 50
         self.char = char
-        self.stage = "FINAL_DESTINATION"
+        self.stage = args.stage #"BATTLEFIELD"
         self.script_path = "./self_train.py"
         
         self.exp_name = exp_name
@@ -97,10 +98,11 @@ class Selfplay:
         self.run_command(cmd)
     
     def can_release(self, new_model):
-        prev_model_path = os.path.join(self.save_dir, "agent_0.pt") #random.choice(self.models.get(self.char))
+        #prev_model_path = os.path.join(self.save_dir, "agent_0.pt") #random.choice(self.models.get(self.char))
+        prev_model_path = self.models.get(self.char)[-1]
         wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
         print(f"{self.char} wins: {wins} , loses {loses}")
-        if wins > loses:
+        if wins > loses + 1:
             return True
         else:
             return False
@@ -238,10 +240,10 @@ if __name__ == "__main__":
     models = ModelContainer()
     MAX_NUMS = 10000
     trainers = {}
-    chars =["LUIGI", "LINK", "PIKACHU"] # ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
+    chars =["LUIGI", "LINK", "PIKACHU", "MARIO", "YOSHI"]# , "LUIGI", "PIKACHU", "LINK"]
     for char in chars:    
-        model_path = f"/home/tgkang/against_cpu_FD/{char}_FD.pt"
-        trainers[char] = Selfplay(model_path=model_path, exp_name=f"./Selfplay2/{char}", char=char, models=models)
+        model_path = f"/home/tgkang/saved_model/against_cpu_BF/{char}_BF.pt"
+        trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
     # for char in chars:
     #     s = trainers[char]
     #     new_model = f"/home/tgkang2/Melee-PPO/scripts/{char}/checkpoints/recent_model.pt"
@@ -249,10 +251,11 @@ if __name__ == "__main__":
     for i in range(MAX_NUMS):
         print("Iter: ", i)
         kill_dolphin()
+        os.system('python kill.py')
         futures = []
         for char in chars:
             futures.append(trainers[char].run)
-        with ProcessPoolExecutor(max_workers=3) as executor:
+        with ProcessPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(x) for x in futures]
         kill_dolphin()
         for char in chars:

@@ -106,7 +106,7 @@ def make_cpu_env(cpu_lvl):
     return gym.make("CPUMeleeEnv")
 
 env = gym.vector.AsyncVectorEnv([
-    lambda: make_cpu_env(cpu_lvl=9),
+    # lambda: make_cpu_env(cpu_lvl=9),
     lambda: make_selfplay_env(args.op1_char, args.op1_model_path),
     lambda: make_selfplay_env(args.op2_char, args.op2_model_path),
 ])
