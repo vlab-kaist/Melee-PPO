@@ -99,10 +99,9 @@ class SDI():
                 else:
                     return (self.cardinal_direction[0], 0)
 
-        if gamestate.frame % 2:
-            x, y = SDI.cardinal_right(self.cardinal_direction)
-        else:
-            x, y = SDI.cardinal_left(self.cardinal_direction)
+        sdi_directions = [self.cardinal_direction, SDI.cardinal_right(self.cardinal_direction), self.cardinal_direction, SDI.cardinal_left(self.cardinal_direction)]
+        x, y = sdi_directions[gamestate.frame % 4]
+        
         return (x, y)
 
     def handle_situational_sdi(self, gamestate, smashbot_state, opponent_state):
@@ -111,20 +110,17 @@ class SDI():
         self.cardinal_direction = (self.cardinal_direction[0], 1)
         print("Notes", "Downsmash SDI angle: " + str(angle))
 
-        if gamestate.frame % 2:
-            x, y = SDI.cardinal_right(self.cardinal_direction)
-        else:
-            x, y = SDI.cardinal_left(self.cardinal_direction)
+        sdi_directions = [self.cardinal_direction, SDI.cardinal_right(self.cardinal_direction), self.cardinal_direction, SDI.cardinal_left(self.cardinal_direction)]
+        x, y = sdi_directions[gamestate.frame % 4]
+
         return (x, y)
     
     def handle_off_stage_sdi(self, gamestate, smashbot_state):
-        cardinal = (int(smashbot_state.position.x < 0), int(smashbot_state.position.y < 0))
-        print("Notes", "Off-stage SDI cardinal: " + str(cardinal))
+        self.cardinal_direction = (2*int(smashbot_state.position.x < 0)-1, 2*int(smashbot_state.position.y < 0)-1)
+        print("Notes", "Off-stage SDI cardinal: " + str(self.cardinal_direction))
 
-        if gamestate.frame % 2:
-            x, y = SDI.cardinal_right(cardinal)
-        else:
-            x, y = SDI.cardinal_left(cardinal)
+        sdi_directions = [self.cardinal_direction, SDI.cardinal_right(self.cardinal_direction), self.cardinal_direction, SDI.cardinal_left(self.cardinal_direction)]
+        x, y = sdi_directions[gamestate.frame % 4]
 
         return (x, y)
 
@@ -149,10 +145,8 @@ class SDI():
                     if self.cardinal_direction[0] == 0:
                         self.cardinal_direction = (1, 0)
 
-        if gamestate.frame % 2:
-            x, y = SDI.cardinal_right(self.cardinal_direction)
-        else:
-            x, y = SDI.cardinal_left(self.cardinal_direction)
+        sdi_directions = [self.cardinal_direction, SDI.cardinal_right(self.cardinal_direction), self.cardinal_direction, SDI.cardinal_left(self.cardinal_direction)]
+        x, y = sdi_directions[gamestate.frame % 4]
 
         return (x, y)
 
@@ -180,9 +174,7 @@ class SDI():
             else:
                 return (self.cardinal_direction[0], 0)
 
-        if gamestate.frame % 2:
-            x, y = SDI.cardinal_right(self.cardinal_direction)
-        else:
-            x, y = SDI.cardinal_left(self.cardinal_direction)
+        sdi_directions = [self.cardinal_direction, SDI.cardinal_right(self.cardinal_direction), self.cardinal_direction, SDI.cardinal_left(self.cardinal_direction)]
+        x, y = sdi_directions[gamestate.frame % 4]
 
         return (x, y)
