@@ -11,6 +11,7 @@ import csv
 import random
 import subprocess
 from collections import deque
+import time
 
 import torch
 import torch.nn as nn
@@ -41,6 +42,20 @@ parser.add_argument(
 parser.add_argument("--stage", default=None, type=str, help="BATTLEFIELD, FINAL_DESTINATION, POKEMON_STADIUM")
 args = parser.parse_args()
 
+def kill_dolphin():
+    # clear dolphin
+    current_user = os.getlogin()
+    for proc in psutil.process_iter(['pid', 'username', 'name']):
+        try:
+            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
+                parent_pid = proc.pid
+                parent = psutil.Process(parent_pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+            
 class ModelContainer:
     def __init__(self):
         self.models = {}
@@ -75,6 +90,7 @@ class Selfplay:
         self.init_timestep = 0
         self.models = models
         self.models.push(self.char, os.path.join(self.save_dir, "agent_0.pt"))
+            
         
     def run(self):
         op1_char = self.char
@@ -100,9 +116,15 @@ class Selfplay:
     def can_release(self, new_model):
         #prev_model_path = os.path.join(self.save_dir, "agent_0.pt") #random.choice(self.models.get(self.char))
         prev_model_path = self.models.get(self.char)[-1]
-        wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
+        wins, loses = 0, 0
+        for _ in range(5):
+            kill_dolphin()
+            w, l = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=2)
+            wins += w; loses += l
+        #wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
+        kill_dolphin()
         print(f"{self.char} wins: {wins} , loses {loses}")
-        if wins > loses + 1:
+        if wins > loses:
             return True
         else:
             return False
@@ -190,12 +212,14 @@ class Selfplay:
         
         state, info = env.reset()
         done = False
-        while not done:
+        steps = 0
+        while not done and steps < 28500:
             with torch.no_grad():
                 action, _ = agent_ppo.act(state, 1, 0)
                 op_action, _ = op_ppo.act(state, 1, 0)
             next_state, reward, done, truncated, info = env.step((action, op_action))
             state = next_state
+            steps += 1
         env.close()
         if state.player[1].stock > state.player[2].stock:
             return 1
@@ -204,9 +228,9 @@ class Selfplay:
         else:
             return 0
         
-    def parallel_match(self, p1_char, p1_model_path, p2_char, p2_model_path, stage, parallel_num=10):
+    def parallel_match(self, p1_char, p1_model_path, p2_char, p2_model_path, stage, parallel_num=3):
         futures = []
-        for _ in range(10):
+        for _ in range(parallel_num):
             futures.append((self.match, p1_char, p1_model_path, p2_char, p2_model_path, stage))
         with ProcessPoolExecutor(max_workers=parallel_num) as executor:
             futures = [executor.submit(*x) for x in futures]
@@ -221,20 +245,6 @@ class Selfplay:
             except Exception as e:
                 print(f"error ouccured: {e}")
         return p1_wins, p2_wins
-        
-def kill_dolphin():
-    # clear dolphin
-    current_user = os.getlogin()
-    for proc in psutil.process_iter(['pid', 'username', 'name']):
-        try:
-            if proc.info['username'] == current_user and proc.name() == "dolphin-emu":
-                parent_pid = proc.pid
-                parent = psutil.Process(parent_pid)
-                for child in parent.children(recursive=True):
-                    child.kill()
-                parent.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
 
 if __name__ == "__main__":
     models = ModelContainer()
@@ -244,10 +254,6 @@ if __name__ == "__main__":
     for char in chars:    
         model_path = f"/home/tgkang/saved_model/against_cpu_BF/{char}_BF.pt"
         trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
-    # for char in chars:
-    #     s = trainers[char]
-    #     new_model = f"/home/tgkang2/Melee-PPO/scripts/{char}/checkpoints/recent_model.pt"
-    #     print(s.can_release(new_model))
     for i in range(MAX_NUMS):
         print("Iter: ", i)
         kill_dolphin()
@@ -273,4 +279,12 @@ if __name__ == "__main__":
                         continue
                     print(f":::Release new agent: {new_model}")
                     s.models.push(char, new_model)
+            # when process is terminated before evaluation
+            elif s.init_timestep % s.save_freq == 0:
+                shutil.copy2(s.recent_model, new_model)
+                if not s.can_release(new_model):
+                    os.remove(new_model)
+                    continue
+                print(f":::Release new agent: {new_model}")
+                s.models.push(char, new_model)
         kill_dolphin()
