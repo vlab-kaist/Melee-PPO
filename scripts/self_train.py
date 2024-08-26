@@ -130,16 +130,16 @@ cfg_ppo["lambda"] = 0.95
 cfg_ppo["learning_rate"] = 5 * 1e-6
 # cfg_ppo["learning_rate_scheduler"] = KLAdaptiveRL
 # cfg_ppo["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
-cfg_ppo["grad_norm_clip"] = 1.0
+cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False
-cfg_ppo["entropy_loss_scale"] = 0.01
+cfg_ppo["entropy_loss_scale"] = 0.005
 cfg_ppo["value_loss_scale"] = 0.5
 cfg_ppo["kl_threshold"] = 0
 cfg_ppo["value_preprocessor"] = RunningStandardScaler
 cfg_ppo["value_preprocessor_kwargs"] = {"size": 1, "device": device}
-cfg_ppo["experiment"]["write_interval"] = 512
+cfg_ppo["experiment"]["write_interval"] = 1024
 cfg_ppo["experiment"]["checkpoint_interval"] = args.timesteps
 
 agent_ppo = PPOGRUAgent(models=models_ppo,
