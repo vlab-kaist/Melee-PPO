@@ -195,7 +195,7 @@ class PPOGRUAgent(PPO_RNN):
         if(abs(ai.position.x) < edge_pos):
             is_left_oriented = not is_left_oriented
         ep = 2
-        if(ai.action in [Action.SWORD_DANCE_2_MID, Action.DAMAGE_FLY_NEUTRAL,Action.SWORD_DANCE_2_HIGH]):
+        if(ai.action in [Action.SWORD_DANCE_2_MID, Action.DAMAGE_FLY_NEUTRAL,Action.SWORD_DANCE_2_HIGH]): #Rocket action, damaged action
             
             self.macro_queue = [2] if is_left_oriented else [1]
         elif(STRAIGHT - ep < abs(ai.position.x) - edge_pos and abs(ai.position.x) - edge_pos < STRAIGHT + ep and -5<ai.position.y and ai.position.y < 5): #LEFT
@@ -233,8 +233,7 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
             self.macro_queue = [19, 0] # use L key
         elif ai.jumps_left > 0 and (abs(ai.position.x) > edge_pos + 50 or ai.position.y < -40): # jump
             self.macro_queue = [21,2] if is_left else [20,1]
-        elif ai.position.y > 10 and abs(ai.position.x) > edge_pos + 100: # just move
-        #elif ai.position.y > 0 and abs(ai.position.x) > edge_pos + 60: # just move
+        elif ai.position.y > 10 and abs(ai.position.x) > edge_pos + 100: # rocket
             self.macro_queue = [10] if is_left else [9]
             #self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
         else:
