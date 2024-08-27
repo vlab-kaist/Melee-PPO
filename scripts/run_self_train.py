@@ -87,7 +87,7 @@ class Selfplay:
             os.makedirs(self.save_dir)
         shutil.copy2(model_path, self.recent_model)
         shutil.copy2(model_path, os.path.join(self.save_dir, "agent_0.pt"))
-        self.init_timestep = self.timesteps * 500
+        self.init_timestep = 0
         self.models = models
         self.models.push(self.char, os.path.join(self.save_dir, "agent_0.pt"))
         # for i in range(500 // 50 + 1):
@@ -258,7 +258,6 @@ if __name__ == "__main__":
     for char in chars:    
         model_path = f"/home/tgkang/saved_model/selfplay_BF_0/{char}_BF.pt"
         trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
-    trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
     
     for i in range(MAX_NUMS):
         print("Iter: ", i)
