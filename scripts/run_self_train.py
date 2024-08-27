@@ -62,7 +62,7 @@ class ModelContainer:
         
     def push(self, char, model_path):
         if not char in self.models:
-            self.models[char] = deque(maxlen=10)
+            self.models[char] = deque(maxlen=3)
             self.models[char].append(model_path)
         else:
             self.models[char].append(model_path)
@@ -87,10 +87,14 @@ class Selfplay:
             os.makedirs(self.save_dir)
         shutil.copy2(model_path, self.recent_model)
         shutil.copy2(model_path, os.path.join(self.save_dir, "agent_0.pt"))
-        self.init_timestep = 0
+        self.init_timestep = self.timesteps * 500
         self.models = models
         self.models.push(self.char, os.path.join(self.save_dir, "agent_0.pt"))
-            
+        # for i in range(500 // 50 + 1):
+        #     path = os.path.join(self.save_dir, f"agent_{i * self.save_freq}.pt")
+        #     if os.path.exists(path):
+        #         self.models.push(self.char, path)
+        #         print(path)
         
     def run(self):
         op1_char = self.char
@@ -124,7 +128,7 @@ class Selfplay:
         #wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
         kill_dolphin()
         print(f"{self.char} wins: {wins} , loses {loses}")
-        if wins > loses:
+        if wins >= 6:
             return True
         else:
             return False
@@ -250,13 +254,16 @@ if __name__ == "__main__":
     models = ModelContainer()
     MAX_NUMS = 10000
     trainers = {}
-    chars =["LUIGI", "LINK", "PIKACHU", "MARIO", "YOSHI"]# , "LUIGI", "PIKACHU", "LINK"]
+    chars =["LUIGI", "LINK", "PIKACHU", "MARIO", "YOSHI"]
     for char in chars:    
-        model_path = f"/home/tgkang/saved_model/against_cpu_BF/{char}_BF.pt"
+        model_path = f"/home/tgkang/saved_model/selfplay_BF_0/{char}_BF.pt"
         trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
+    trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
+    
     for i in range(MAX_NUMS):
         print("Iter: ", i)
         kill_dolphin()
+        os.system("kill $(ps aux | grep 'python ./self_train' | awk '{print $2}')")
         os.system('python kill.py')
         futures = []
         for char in chars:
