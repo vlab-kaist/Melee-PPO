@@ -260,16 +260,24 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
         edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
-        edge_diff = abs(ai.position.x) - edge_pos
+        edge_diff = abs(ai.position.x) - melee.stages.EDGE_POSITION[self.gamestate.stage]
         is_left = ai.position.x < 0
-        if ai.position.y >= -5 or ai.speed_y_self > 0:
+        if ai.position.y >= 5:
             self.macro_queue = [2] if is_left else [1]
         elif ai.jumps_left > 0: #jump
             self.macro_queue = [21] if is_left else [20]
         else: 
-            if (edge_diff < 20) and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD,
-                                                      Action.JUMPING_ARIAL_FORWARD, Action.JUMPING_ARIAL_BACKWARD]: # airdodge
-                self.macro_queue = [35] if is_left else [34]
+            if 0 < edge_diff < 25 and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD, 
+                                                        Action.JUMPING_ARIAL_FORWARD, Action.JUMPING_ARIAL_BACKWARD]:
+                self.macro_queue = [2] if is_left else [1]
+                x, y = ai.position.x, ai.position.y
+                vx, vy = ai.speed_air_x_self, ai.speed_y_self
+                t = melee.stages.EDGE_POSITION[self.gamestate.stage] / abs(vx)
+                ny = y + vy * t - 0.5 * 0.093 * t ** 2
+                if ny < -3 and (vx > 0 if is_left else vx < 0): # airdodge
+                    self.macro_queue = [35] if is_left else [34]
+                else:
+                    self.macro_queue = [2] if is_left else [1]
             else: #move
                 self.macro_queue = [2] if is_left else [1]
                 
@@ -312,7 +320,7 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
             prob[0][23 if is_left else 24] = 0
             prob[0][20 if is_left else 21] = 0
                      
-        if edge_diff < 32 and ai.position.y > float(1e-04):
+        if edge_diff < 32 and not ai.on_ground:
             # prevent dodge or attack while jump
             prob[0][6 if is_left else 7] = 0
             prob[0][34 if is_left else 35] = 0
@@ -369,11 +377,11 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
                 prob[0][30] = 0
                 prob[0][31] = 0
         # if yoshi roll near edge, move opposite direction
-        if edge_diff < 30 and ai.action in [Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_1_AIR]:
+        if edge_diff < 45 and ai.action in [Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_1_AIR]:
             if is_left and (ai.speed_air_x_self < 0 or ai.speed_ground_x_self < 0):
-                prob[0][2] = 10 # force move
+                prob[0][33] = 10 # force move
             elif not is_left and (ai.speed_air_x_self > 0 or ai.speed_ground_x_self > 0):
-                prob[0][1] = 10
+                prob[0][32] = 10
         if edge_diff < 25 and not ai.action in [Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_1_AIR]:
             # do not roll near the edge
             prob[0][9 if is_left else 10] = 0
