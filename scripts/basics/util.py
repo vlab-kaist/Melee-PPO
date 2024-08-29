@@ -18,6 +18,7 @@ class ObservationSpace:
         reward = (0, 0)
         info = None
         self.current_gamestate = gamestate
+        self.current_frame += 1
         self.player_count = len(list(gamestate.players.keys()))
         
         if self.previous_gamestate is not None:
@@ -80,7 +81,7 @@ class ObservationSpace:
         stocks = np.array(
             [gamestate.players[i].stock for i in list(gamestate.players.keys())]
         )
-        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
+        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:]) or self.current_frame > 28500
         
         state1 = state_preprocess(gamestate, 1, platform=False)
         state2 = state_preprocess(gamestate, 2, platform=False)
@@ -106,6 +107,7 @@ class PlatformObservationSpace:
         reward = (0, 0)
         info = None
         self.current_gamestate = gamestate
+        self.current_frame += 1
         self.player_count = len(list(gamestate.players.keys()))
         
         if self.previous_gamestate is not None:
@@ -168,7 +170,7 @@ class PlatformObservationSpace:
         stocks = np.array(
             [gamestate.players[i].stock for i in list(gamestate.players.keys())]
         )
-        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
+        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:]) or self.current_frame > 28500
         
         # state for player 1
         state1 = state_preprocess(gamestate, 1, platform=True)
