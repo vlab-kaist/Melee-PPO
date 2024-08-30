@@ -210,7 +210,19 @@ class Powertest:
                 
 if __name__ == "__main__":
     P = Powertest(save_replay=True)
-    P.match(lvl=9) # for cpu eval
+    #P.match(lvl=9) for cpu eval
     #P.match() # for multi eval
+    win = 0
+    lose = 0
+    tie = 0
+    for i in range(1):
+        res = P.match()
+        if res == 1:
+            win += 1
+        elif res == -1:
+            lose += 1
+        else:
+            tie += 1
+    print("win: ", win, "lose: ", lose,"tie: ", tie)
     #P.run_test() # for specific power test
     #P.run_cpu_test() # for all level power test

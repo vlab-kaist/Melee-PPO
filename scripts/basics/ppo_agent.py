@@ -9,8 +9,11 @@ import melee
 from melee import enums
 from melee.enums import Action, Character, Button
 import numpy as np
-from enum import Enum       
-        
+from enum import Enum  
+from heuristics.sdi import SDI  
+import random   
+
+
 class PPOGRUAgent(PPO_RNN):
     def __init__(self, agent_id=1, players=None, csv_path=None,
                  is_selfplay=False, platform=False, delay=3, tou=0.5, *args, **kwargs):
@@ -31,11 +34,25 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_mode = False
         self.macro_queue = []
         self.macro_idx = 0
+
+        self.mash_mode = False
+        self.mash_queue = [4,8,22,19]
+        self.mash_idx = 0
+
         self.side_b = False # for mario
-        self.cyclone_luigi = False # for mario and luigi
-        self.cyclone_mario = False
+        self.cyclone = False # for mario and luigi
+        self.mash_counter = 0 # for mash action, 
+        self.cc_test = None # for cc effectiveness check
+        self.sdi = None # for sdi implication
+        self.prev_action = None # for action confirming
+        self.prev_op_action = None
+        self.shield_charging = False
+        self.cnt = 0
+
         
+    # Priority : 1. Recovery & SDI (never possible simultaenously due to conditions) 2. Grab Mash 3. L_cancel 4. no_shield  
     def act(self, states, timestep: int, timesteps: int):
+        self.cnt += 1
         #if env is not myenv, env gives gamestate itself to an agent
         if not isinstance(states, torch.Tensor):
             self.gamestate = states
@@ -43,20 +60,80 @@ class PPOGRUAgent(PPO_RNN):
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         if isinstance(self.gamestate, melee.gamestate.GameState):
             ai = self.gamestate.players[self.agent_id]
-            # TODO: consider case when cyclone is interrupted during frame 1-43
-            if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH): # cyclone is charged when down b occurs on ground
-                self.cyclone_luigi = False
-            if ai.on_ground:
-                self.cyclone_mario = False
+            op = self.gamestate.players[3 - self.agent_id]
+
+            #print(op.position.x, op.position.y)
+            if ai.action != self.prev_action:
+                #print("ai:", ai.action, self.cnt)
+                self.prev_action = ai.action
+            if op.action != self.prev_op_action:
+                #print("op:", op.action, self.cnt)
+                self.prev_op_action = op.action
+            
+            if ai.shield_strength >= 40:
+                self.shield_charging = False
+            # initial sdi setup
+            if ai.hitlag_left <= 1:
+                self.sdi = None
+
+            actionable_landing = ai.action == Action.LANDING and ai.action_frame >= 4
+
+            #5 Crouch cancel?
+            '''if ai.action in [Action.STANDING] or actionable_landing:  
+                if self.cc_test == "occ":
+                    self.crouch_cancel(mode = 1)
+                elif self.cc_test == "dcc": 
+                    self.crouch_cancel(mode = 2)
+                else:
+                    self.crouch_cancel(mode = 3)
+            '''
+            #4 Do not over shield
+            if ai.shield_strength < 10:
+                self.no_shield()
+                self.shield_charging = True
+
+
+
+            #3 L_cancel check
+            if ai.speed_y_self < 0 and abs(ai.speed_y_self) > 2:
+                self.l_cancel_check()
+            #2 Grab Mash    
+            if ai.action in [Action.GRABBED_WAIT_HIGH, Action.GRAB_PULLING_HIGH, Action.PUMMELED_HIGH, Action.GRAB_WAIT, Action.GRAB_PULL, Action.GRABBED, Action.GRAB_PUMMELED, Action.YOSHI_EGG, Action.CAPTURE_YOSHI, Action.THROWN_FORWARD, Action.THROWN_BACK, Action.THROWN_UP, Action.THROWN_DOWN, Action.THROWN_DOWN_2]:
+                self.mash_mode = True
+            else:
+                self.mash_mode = False
+  
+            if self.gamestate.projectiles:
+                for projectiles in self.gamestate.projectiles:
+            
+                    if projectiles.type != enums.ProjectileType.ARROW and (abs(ai.position.x - projectiles.position.x) <= 25 and abs(ai.position.y - projectiles.position.y) <=10):
+                        if ai.shield_strength > 20 and not self.shield_charging:                            
+                            self.emergency_shield()
+            
+            # Related aspects to recovery
+            if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH) or ai.action.value <= 10: # cyclone is charged when down b occurs on ground
+                self.cyclone = False
+            
             if ai.on_ground or not ai.off_stage:
                 self.side_b = False
             
-            if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
+            if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING] and ai.character != Character.LINK:
                 self.macro_mode = False
                 self.macro_queue = []
                 self.macro_idx = 0
 
+            #1 SDI
+            elif ai.hitlag_left > 1:
+                op = self.gamestate.players[3 - self.agent_id]
+                if self.sdi is None:
+                    self.sdi = SDI()
+                self.action = self.sdi.get_action(self.gamestate, ai, op)
+                #print(str(self.action)+ "\n")
+                
+                return self.action, self._current_log_prob
+            #1 Recovery
             elif (not self.macro_mode) and ai.off_stage:
+                
                 if ai.character in [Character.MARIO, Character.DOC]:
                     self.mario_recovery()
                 elif ai.character == Character.LINK:
@@ -67,18 +144,41 @@ class PPOGRUAgent(PPO_RNN):
                     self.yoshi_recovery()
                 else:
                     self.luigi_recovery()
+
+        if self.mash_mode:
+            #print("mash", self.cnt)
+            self.action = self.mash_queue[self.mash_idx]
+            self.prev = self.action
+            self.mash_idx += 1
+
+            if self.mash_idx == len(self.mash_queue):
+                self.mash_idx = 0 
+
+            return self.action, self._current_log_prob
+
+
+
         if self.macro_mode:
+            #print("macro", self.cnt)
+            
             self.action = self.macro_queue[self.macro_idx]
             self.prev = self.action
             self.macro_idx += 1
+            
             if self.macro_idx >= len(self.macro_queue):
                 self.macro_idx = 0
                 self.macro_mode = False
                 self.macro_queue = []
                 self.action_cnt = 3 # initialize action queue
-            self.action = torch.tensor(self.action).unsqueeze(0)
+
+            #print(self.action, "in agent macro")
+            
+
+            
             return self.action, self._current_log_prob
+            
         else:
+            
             if self.action_cnt >= self.delay : #or 21 <= self.prev <= 24: # 3
                 rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
                 actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
@@ -88,7 +188,7 @@ class PPOGRUAgent(PPO_RNN):
                     # prevent suicide action
                     if isinstance(self.gamestate, melee.gamestate.GameState):
                         prob = self.mask_suicide_action(prob)
-                    self.action = torch.multinomial(prob, num_samples=1).unsqueeze(0)
+                    self.action = torch.multinomial(prob, num_samples=1)
                     # self.action = torch.argmax(outputs["net_output"]).unsqueeze(0)
                 else:
                     self.action = actions
@@ -99,11 +199,116 @@ class PPOGRUAgent(PPO_RNN):
             else:
                 self.action_cnt += 1
             self.prev = self.action
+            #self.action = 0
+            #print(self.action, "in agent normal")
             return self.action, self._current_log_prob
-            #return torch.tensor(0).unsqueeze(0) if self.agent_id == 1 else self.action, self._current_log_prob
-    
+                  
     def state_preprocess(self, gamestate):
         return state_preprocess(gamestate, self.agent_id, self.platform)
+    
+    
+    def l_cancel_check(self):
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+
+        left_height, left_left, left_right = melee.left_platform_position(self.gamestate)
+        right_height, right_left, right_right = melee.right_platform_position(self.gamestate)
+        top_height, top_left, top_right = melee.top_platform_position(self.gamestate)
+
+        is_valid_action = ai.action in [Action.FALLING,Action.FALLING_FORWARD,Action.FALLING_BACKWARD,Action.FALLING_AERIAL,
+        Action.FALLING_AERIAL_FORWARD,Action.FALLING_AERIAL_BACKWARD,Action.DOWN_B_AIR,Action.SWORD_DANCE_1_AIR, 
+        Action.SWORD_DANCE_2_HIGH_AIR, Action.SWORD_DANCE_2_MID_AIR, Action.SWORD_DANCE_3_HIGH_AIR, 
+        Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_3_LOW_AIR, Action.SWORD_DANCE_4_HIGH_AIR, 
+        Action.SWORD_DANCE_4_MID_AIR, Action.SWORD_DANCE_4_LOW_AIR, Action.SPECIAL_FALL_FORWARD, Action.SPECIAL_FALL_BACK, 
+        Action.DOWNSMASH, Action.NAIR, Action.FAIR, Action.BAIR, Action.UAIR, Action.DAIR
+]
+
+        if self.prev_action == Action.YOSHI_EGG:
+            return
+        if (ai.position.y > -1e-4 and ai.position.y < 3) and (abs(ai.position.x) < edge_pos - 10 and is_valid_action):
+            self.macro_mode = True
+            b = random.random()
+            self.macro_idx = 0
+            print("l cancel",b)
+            self.macro_queue = [19]
+            return
+        elif ((-1e-4 <ai.position.y - left_height < 3) or (-1e-4 <ai.position.y - top_height < 4) if top_height else top_height)and ((left_left <ai.position.x < left_right) or (right_left <ai.position.x < right_right)):
+            self.macro_mode = True
+            b = random.random()
+            self.macro_idx = 0
+            print("l cancel",b)
+            self.macro_queue = [19]
+        else:
+            return
+        
+    def no_shield(self):
+        ai = self.gamestate.players[self.agent_id]
+        if ai.action in [Action.SHIELD, Action.SHIELD_REFLECT, Action.SHIELD_RELEASE]:
+            self.macro_mode = True
+            self.macro_queue = [22] #May change to random selectabel oos options
+            self.macro_idx = 0
+        else:
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+    def emergency_shield(self):
+
+        ai = self.gamestate.players[self.agent_id]
+        
+        if ai.on_ground:
+            
+            self.macro_mode = True
+            print("emergency shield")
+            self.macro_queue = [19]*2
+            self.macro_idx = 0
+            
+            return
+        
+        else:
+
+            return
+
+    def mash(self):
+
+        #mash_inputs = [False]*7 + [0]*6
+        #mash_keys = [0,1,2,3,5] #A B X Y L -> A B X Y L ...
+        return
+
+    def crouch_cancel(self, mode):
+        ai = self.gamestate.players[self.agent_id]
+        num = mode
+        if num == 3:
+            return
+        
+        if ai.percent > 60 and num == 2:
+            
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+            
+            return
+
+        if not ai.on_ground:
+            
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+            
+            return
+            
+        if ai.action in [Action.CROUCHING, Action.CROUCH_START, Action.CROUCH_END]:
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+            
+            return
+
+        self.macro_mode = True
+        self.macro_idx = 0
+        self.macro_queue = [3, 3, 3]
+
+        
+        return
     
     # make possible to use gamestate during training
     def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
@@ -111,43 +316,29 @@ class PPOGRUAgent(PPO_RNN):
         self.gamestate = infos["gamestate"]
     
     def mario_recovery(self):
-        # maybe optimal?
+        # maybe optimal?            
         self.macro_mode = True
         self.macro_idx = 0
         ai = self.gamestate.players[self.agent_id]
         edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
         is_left = ai.position.x < 0
-        is_left_oriented = ai.x < 0
-        diff = abs(ai.position.x) - edge_pos
-        if diff < 0:
-            is_left_oriented = not is_left_oriented
         if ai.position.y > 0: # just move
-            self.macro_queue = [2] if is_left_oriented else [1]
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
         else:
             if ai.jumps_left > 0: # jump
-                self.macro_queue = [21, 0] if is_left else [20, 0]
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
             else: 
-                if diff > 40 and not self.side_b and ai.speed_y_self < 0: # 40 => more larger ex.50? if y speed is too high, dont do it?
-                    self.macro_queue = [10, 10, 10] if is_left else [9, 9, 9] # apply side B
-                    self.macro_queue += [2] * 34 if is_left else [1] * 34 # this is important
-                    #self.macro_queue += [33, 33, 31, 31] * 15 if is_left else [32, 32, 30, 30] * 15
-                    #print("side b")
-                    self.side_b = True                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
-                
-                elif diff > 40 and not self.cyclone_mario and ai.speed_y_self < 0:
+                if ai.position.y > -20 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                elif abs(ai.position.x) - edge_pos > 40 and not self.cyclone:
                     self.macro_queue = [33, 33, 31, 31] * 15 if is_left else [32, 32, 30, 30] * 15
-                    self.cyclone_mario = True
-                
-                elif ai.position.y < -30: # up b
-                    diff = abs(ai.position.x) - edge_pos
-                    if diff > 10:
-                        self.macro_queue = [14, 0] if is_left else [13, 0]
-                    elif diff < -10:
-                        self.macro_queue = [13, 0] if is_left else [14, 0]
-                    else:
-                        self.macro_queue = [12, 0]
-                else:
-                    self.macro_queue = [2] if is_left_oriented else [1]
+                    self.cyclone = True
+                elif abs(ai.position.x) - edge_pos > 40 and ai.position.y > -10 and not self.side_b: # 40 => more larger ex.50?
+                    self.macro_queue = [10, 10, 10] if is_left else [9, 9, 9] # apply side B
+                    self.macro_queue += [2, 2] * 20 if is_left else [1, 1] * 20 # this is important
+                    self.side_b = True
+                else: # up B
+                    self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
     
     def link_recovery(self):
         # maybe optimal?
@@ -159,39 +350,41 @@ class PPOGRUAgent(PPO_RNN):
         if abs(ai.position.x) < edge_pos:
             is_left = not is_left
         edge_diff= abs(ai.position.x) - edge_pos
-        is_left_oriented = ai.x < 0
+        
         # impossible hook recovery
         if ((not ai.facing) and is_left) or (ai.facing and (not is_left)):
             if ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
-                self.macro_queue = [2] if is_left_oriented else [1]
+                self.macro_queue = [2] if is_left else [1]
             elif ai.jumps_left > 0: #jump
-                self.macro_queue = [21] if is_left_oriented else [20]
+                self.macro_queue = [21] if is_left else [20]
             elif(ai.position.y < -50): #b special
-                self.macro_queue = [14] if is_left_oriented else [13]
+                self.macro_queue = [14] if is_left else [13]
             else:
-                self.macro_queue = [2] if is_left_oriented else [1]
-    #     elif ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
-    # Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
-    #         self.macro_queue = [19, 0] # use L key
+                self.macro_queue = [2] if is_left else [1]
+        elif ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
+    Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
+            self.macro_queue = [19, 0] # use L key
         elif ai.action in [Action.DOWN_B_GROUND]: # if agent holds grab
             self.macro_queue = [15, 0]
         elif ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
-            self.macro_queue = [2] if is_left_oriented else [1]
+            self.macro_queue = [2] if is_left else [1]
         else:
             if (ai.action in [Action.AIRDODGE]): #grab should be executed within 49 frame after airdodge
                 if (edge_diff < 50 or ai.action_frame >= 30) and ai.position.y <= float(1e-04):
                     self.macro_queue = [17] if is_left else [16]
                 else:
                     self.macro_queue = [19]    
-            elif ai.jumps_left > 0 and (abs(ai.position.x) > edge_pos +50 or ai.position.y < -30): #jump
-                self.macro_queue = [21] if is_left_oriented else [20]
+            elif ai.jumps_left > 0: #jump
+                self.macro_queue = [21] if is_left else [20]
+            elif (ai.facing and not is_left) or ((not ai.facing) and is_left):
+                self.macro_queue = [10] if is_left else [9]
             else: 
                 if(ai.position.y < -50): #b special
                     self.macro_queue = [14] if is_left else [13]
                 elif(edge_diff < 120): # airdodge
                     self.macro_queue = [35] if is_left else [34] #arrow + L. 
                 else: #move
-                    self.macro_queue = [2] if is_left_oriented else [1]
+                    self.macro_queue = [2] if is_left else [1]
     
     def pikachu_recovery(self):
         # maybe optimal?
@@ -200,114 +393,63 @@ class PPOGRUAgent(PPO_RNN):
         ai = self.gamestate.players[self.agent_id]
         edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
         is_left = ai.position.x < 0
-        STRAIGHT = 55
-        is_left = ai.position.x < 0
-        is_left_oriented = ai.position.x < 0
-        if(abs(ai.position.x) < edge_pos):
-            is_left_oriented = not is_left_oriented
-        ep = 2
-        if(ai.action in [Action.SWORD_DANCE_2_MID, Action.DAMAGE_FLY_NEUTRAL,Action.SWORD_DANCE_2_HIGH]): #Rocket action, damaged action
-            
-            self.macro_queue = [2] if is_left_oriented else [1]
-        elif(STRAIGHT - ep < abs(ai.position.x) - edge_pos and abs(ai.position.x) - edge_pos < STRAIGHT + ep and -5<ai.position.y and ai.position.y < 5): #LEFT
-            #print("x 50 y ==0")
-            
-            self.macro_queue = [12,12]
-            self.macro_queue += [10] * 15 if is_left else [9]* 15
-        elif(50- ep < abs(ai.position.x) - edge_pos and abs(ai.position.x) - edge_pos < 50 + ep and ai.position.y < STRAIGHT and ai.position.y > 0 and abs(ai.speed_x_attack) < 0.5): #LEFT AND DOWN
-            #print("x 50 y > 0")
-            
-            self.macro_queue = [12,12]
-            self.macro_queue += [10] * 15 if is_left else [9]* 15
-            self.macro_queue += [11] * 24
-        
-        elif(STRAIGHT - ep < abs(ai.position.x) - edge_pos and abs(ai.position.x) - edge_pos < STRAIGHT + ep and -STRAIGHT<ai.position.y and ai.position.y < 0 and abs(ai.speed_x_attack) < 0.5): #LEFT AND UP
-            #print("x 50 y <0")
-            
-            self.macro_queue = [12,12]
-            self.macro_queue += [10] * 15 if is_left else [9]* 15
-            self.macro_queue += [12] * 24
-            
-        elif(STRAIGHT -ep <ai.position.y and ai.position.y< STRAIGHT + ep and abs(ai.position.x) - edge_pos < STRAIGHT): # DOWN and LEFT
-            #print("y 50")
-            self.macro_queue = [12,12]
-            self.macro_queue += [11] * 12
-            self.macro_queue += [10] * 6 if is_left else [9] * 6
-        
-        elif(-STRAIGHT -ep <ai.position.y and ai.position.y< -STRAIGHT + ep and abs(ai.position.x) - edge_pos < STRAIGHT): # UP AND LEFT
-            #print("y -50")
-            self.macro_queue = [12] * 4
-            self.macro_queue += [0] * 15 #20
-            self.macro_queue += [10] * 6 if is_left else [9] * 6
-        elif ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING, Action.EDGE_GETUP_SLOW, \
-Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Action.EDGE_ROLL_SLOW, Action.EDGE_ROLL_QUICK]:
-            self.macro_queue = [19, 0] # use L key
-        elif ai.jumps_left > 0 and (abs(ai.position.x) > edge_pos + 50 or ai.position.y < -40): # jump
-            self.macro_queue = [21,2] if is_left else [20,1]
-        elif ai.position.y > 10 and abs(ai.position.x) > edge_pos + 100: # rocket
-            self.macro_queue = [10] if is_left else [9]
-            #self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
-        else:
-            if ai.position.y > -60 and abs(ai.position.x) > edge_pos: # just move
-                self.macro_queue = [2] if is_left_oriented else [1]
-            else: # up B
-                self.macro_queue = [12, 12, 12, 12]
-                self.macro_queue += [0] * 15 #20
-                self.macro_queue += [24, 24, 24] * 2 if is_left else [23, 23, 23] * 2
-    
-    def yoshi_recovery(self):
-        self.macro_mode = True
-        self.macro_idx = 0
-        ai = self.gamestate.players[self.agent_id]
-        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
-        edge_diff = abs(ai.position.x) - melee.stages.EDGE_POSITION[self.gamestate.stage]
-        is_left = ai.position.x < 0
-        if ai.position.y >= 5:
-            self.macro_queue = [2] if is_left else [1]
-        elif ai.jumps_left > 0: #jump
-            self.macro_queue = [21] if is_left else [20]
-        else: 
-            if 0 < edge_diff < 25 and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD, 
-                                                        Action.JUMPING_ARIAL_FORWARD, Action.JUMPING_ARIAL_BACKWARD]:
-                self.macro_queue = [2] if is_left else [1]
-                x, y = ai.position.x, ai.position.y
-                vx, vy = ai.speed_air_x_self, ai.speed_y_self
-                t = melee.stages.EDGE_POSITION[self.gamestate.stage] / abs(vx)
-                ny = y + vy * t - 0.5 * 0.093 * t ** 2
-                if ny < -3 and (vx > 0 if is_left else vx < 0): # airdodge
-                    self.macro_queue = [35] if is_left else [34]
-                else:
-                    self.macro_queue = [2] if is_left else [1]
-            else: #move
-                self.macro_queue = [2] if is_left else [1]
-                
-    def luigi_recovery(self):
-        self.macro_mode = True
-        self.macro_idx = 0
-        ai = self.gamestate.players[self.agent_id]
-        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
-        is_left = ai.position.x < 0
-        diff = abs(ai.position.x) - edge_pos
-        if ai.position.y > 30 and diff > 60:
-            self.macro_queue = [10, 10, 10, 0] if is_left else [9, 9, 9, 0]
-        elif ai.position.y > 0: # just move
-            self.macro_queue = [2] if is_left else [1]
+        if ai.position.y > 0: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
         else:
             if ai.jumps_left > 0: # jump
                 self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
             else: 
-                if ai.position.y > -10 and diff > 0: # just move
-                    self.macro_queue = [2] if is_left else [1]
-                elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone_luigi and ai.speed_y_self < 0:
+                if ai.position.y > -50 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                else: # up B
+                    self.macro_queue = [12, 12, 12, 12]
+                    self.macro_queue += [0] * 15 #20
+                    self.macro_queue += [24, 24, 24] * 2 if is_left else [23, 23, 23] * 2
+    
+    def yoshi_recovery(self):
+        # TODO: need to use side B for reducing distance
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        edge_diff = abs(ai.position.x) - edge_pos
+        is_left = ai.position.x < 0
+        if ai.position.y >= -5 or ai.speed_y_self > 0: # just move -> consider side B only once
+            self.macro_queue = [2] if is_left else [1]
+        elif ai.jumps_left > 0: #jump
+            self.macro_queue = [21] if is_left else [20]
+        else: 
+            if (edge_diff < 20) and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD,
+                                                      Action.JUMPING_ARIAL_FORWARD, Action.JUMPING_ARIAL_BACKWARD]: # airdodge
+                self.macro_queue = [35] if is_left else [34]
+            else: #move
+                self.macro_queue = [2] if is_left else [1]
+            
+    
+    def luigi_recovery(self):
+        # TODO: make more stable when left B fires, and move side using down B
+        self.macro_mode = True
+        self.macro_idx = 0
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+        is_left = ai.position.x < 0
+        if ai.position.y > 30:
+            self.macro_queue = [10, 10, 10, 0] if is_left else [9, 9, 9, 0]
+        elif ai.position.y > 0: # just move
+            self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+        else:
+            if ai.jumps_left > 0: # jump
+                self.macro_queue = [21, 21, 21] if is_left else [20, 20, 20]
+            else: 
+                if ai.position.y > -10 and abs(ai.position.x) - edge_pos > 0: # just move
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
+                elif abs(ai.position.x) - edge_pos > 20 and not self.cyclone:
                     self.macro_queue = [33, 33, 31, 31] * 15 if is_left else [32, 32, 30, 30] * 15
-                    self.cyclone_luigi = True
-                elif abs(ai.position.x) - edge_pos < 17 and ai.speed_y_self < 0: # up B
-                    if diff > 0:
-                        self.macro_queue = [14, 0] if is_left else [13, 0]
-                    else:
-                        self.macro_queue = [13, 0] if is_left else [14, 0]
+                    self.cyclone = True
+                elif abs(ai.position.x) - edge_pos < 15: # up B
+                    self.macro_queue = [14, 14, 14] if is_left else [13, 13, 13]
                 else:
-                    self.macro_queue = [2] if is_left else [1]
+                    self.macro_queue = [2, 2, 2] if is_left else [1, 1, 1]
    
     def mask_suicide_action(self, prob):
         # prevent suicide
@@ -320,12 +462,11 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
             prob[0][23 if is_left else 24] = 0
             prob[0][20 if is_left else 21] = 0
                      
-        if edge_diff < 32 and not ai.on_ground:
+        if edge_diff < 32 and ai.position.y > float(1e-04):
             # prevent dodge or attack while jump
             prob[0][6 if is_left else 7] = 0
             prob[0][34 if is_left else 35] = 0
-            
-        if edge_diff < 25: # prevent to move side
+        if edge_diff < 25:
             prob[0][1 if is_left else 2] = 0
                         
         if ai.character in [Character.MARIO, Character.DOC]:
@@ -370,18 +511,18 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
         is_left = True if ai.position.x < 0 else False
         edge_diff = edge_pos - abs(ai.position.x)
         
-        if edge_diff < 25:
+        if edge_diff < 18:
             # prevent down B
             if (is_left and not ai.facing) or (not is_left and ai.facing):
                 prob[0][11] = 0
                 prob[0][30] = 0
                 prob[0][31] = 0
         # if yoshi roll near edge, move opposite direction
-        if edge_diff < 45 and ai.action in [Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_1_AIR]:
+        if edge_diff < 35 and ai.action in [Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_1_AIR]:
             if is_left and (ai.speed_air_x_self < 0 or ai.speed_ground_x_self < 0):
-                prob[0][33] = 10 # force move
+                prob[0][2] = 1 # force move
             elif not is_left and (ai.speed_air_x_self > 0 or ai.speed_ground_x_self > 0):
-                prob[0][32] = 10
+                prob[0][1] = 1
         if edge_diff < 25 and not ai.action in [Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_1_AIR]:
             # do not roll near the edge
             prob[0][9 if is_left else 10] = 0
@@ -424,14 +565,13 @@ def state_preprocess(gamestate, agent_id, platform=False):
             enums.ProjectileType.DR_MARIO_CAPSULE: 1,
             enums.ProjectileType.LINK_BOMB: 2,
             enums.ProjectileType.LINK_HOOKSHOT: 3,
-            enums.ProjectileType.ARROW: 4, #LINK ARROW
+            enums.ProjectileType.LINK_ARROW: 4,
             enums.ProjectileType.PIKACHU_THUNDER: 5,
             enums.ProjectileType.MARIO_CAPE: 6,
             enums.ProjectileType.DR_MARIO_CAPE: 7,
             enums.ProjectileType.YOSHI_EGG_THROWN: 8,
             enums.ProjectileType.YOSHI_TONGUE: 9,
-            enums.ProjectileType.LINK_BOOMERANG: 10,
-            #enums.ProjectileType.YOSHI_STAR: 10,
+            enums.ProjectileType.YOSHI_STAR: 10,
             enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
             enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
             enums.ProjectileType.LUIGI_FIRE: 13
@@ -458,7 +598,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
     state[4] = gamestate.distance / 20
     state[5] = (edge_pos - abs(p1.position.x)) / edge_pos
     state[6] = (edge_pos - abs(p2.position.x)) / edge_pos
-    state[7] = 1.0 if p1.facing else -1.0
+    state[7] = 1.0 if p1.facing else -1.0 # facing right 1 else 0
     state[8] = 1.0 if p2.facing else -1.0
     state[9] = 1.0 if (p1.position.x - p2.position.x) * state[7] < 0 else -1.0
     state[10] = p1.hitstun_frames_left / 10

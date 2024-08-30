@@ -109,6 +109,7 @@ class Powertest:
                 action, _ = agent_ppo.act(state, 1, 0)
                 op_action = 0
             next_state, reward, done, truncated, info = env.step((action, op_action))
+            
             state = next_state
         env.close()
         if state.player[1].stock > state.player[2].stock:

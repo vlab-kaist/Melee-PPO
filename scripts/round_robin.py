@@ -36,18 +36,19 @@ from power_test import Powertest
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--iso", default="/home/tgkang2/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
+    "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 args = parser.parse_args()
 
 class Player:
-    def __init__(self, char=None, model_path=None, cpu_lvl=None, id=None):
+    def __init__(self, cccase = None,char=None, model_path=None, cpu_lvl=None, id=None):
         self.id = id
         self.char = char
         self.agent_type = "AI" if model_path is not None else "CPU"
         self.model_path = model_path
         self.cpu_lvl = cpu_lvl
         self.wins = {} # dict
+        self.cccase = cccase
 
 def make_env(players, stage):
     config = {
@@ -90,7 +91,6 @@ def match(p1, p2, stage):
                                     num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64)
     models_ppo["value"] = GRUValue(env.observation_space, env.action_space, device, num_envs=1,
                                     num_layers=4, hidden_size=512, ffn_size=512, sequence_length=64) 
-
     agent_ppo = PPOGRUAgent(models=models_ppo,
                     observation_space=env.observation_space,
                     action_space=env.action_space,
@@ -101,6 +101,7 @@ def match(p1, p2, stage):
     agent_ppo.set_mode("eval")
     agent_ppo.set_running_mode("eval")
     agent_ppo.init()
+    agent_ppo.cc_test = p1.cccase
     
     if p2.agent_type == "AI":
         op_models_ppo = {}
@@ -118,6 +119,7 @@ def match(p1, p2, stage):
         op_ppo.set_mode("eval")
         op_ppo.set_running_mode("eval")
         op_ppo.init()
+        op_ppo.cc_test = p2.cccase
     
     state, info = env.reset()
     done = False
@@ -141,7 +143,7 @@ def match(p1, p2, stage):
 
 def parallel_match(p1, p2, stage, parallel_num=1):
     futures = []
-    for _ in range(10):
+    for _ in range(30):
         futures.append((match, p1, p2, stage))
     with ProcessPoolExecutor(max_workers=parallel_num) as executor:
         futures = [executor.submit(*x) for x in futures]
@@ -159,10 +161,9 @@ def parallel_match(p1, p2, stage, parallel_num=1):
         
 #characters = ["DOC", "LINK", "LUIGI", "MARIO", "PIKACHU", "YOSHI"]
 agents = [
-    Player(char="LINK", cpu_lvl=9, id=0),
-    Player(char="LINK", model_path="/home/tgkang/Melee-PPO/scripts/Selfplay2/LINK/checkpoints/agent_0.pt", id=1),
-    Player(char="LINK", model_path="/home/tgkang/Melee-PPO/scripts/Selfplay2/LINK/checkpoints/agent_5400000.pt", id=2),
-    Player(char="LINK", model_path="/home/tgkang/Melee-PPO/scripts/Selfplay2/LINK/checkpoints/agent_11700000.pt", id=3),
+    Player(char="DOC", model_path="/home/tgkang/saved_model/against_cpu_FD/DOC_FD.pt", id=0, cccase = "occ"),
+    Player(char="DOC", model_path="/home/tgkang/saved_model/against_cpu_FD/DOC_FD.pt", id=1, cccase = "dcc"),
+    Player(char="DOC", model_path="/home/tgkang/saved_model/against_cpu_FD/DOC_FD.pt", id=2, cccase = "ncc"),
 ]
 for i in range(len(agents)):
     for j in range(i + 1, len(agents)):
@@ -192,5 +193,5 @@ sns.heatmap(win_matrix, annot=True, fmt="d", cmap="coolwarm", xticklabels=[f'{id
 plt.title("Win Matrix")
 plt.xlabel("Opponent")
 plt.ylabel("Player")
-plt.savefig('win_matrix.png', bbox_inches='tight')
+plt.savefig('win_matrix_more_60p.png', bbox_inches='tight')
 plt.close()

@@ -18,7 +18,6 @@ class ObservationSpace:
         reward = (0, 0)
         info = None
         self.current_gamestate = gamestate
-        self.current_frame += 1
         self.player_count = len(list(gamestate.players.keys()))
         
         if self.previous_gamestate is not None:
@@ -81,7 +80,7 @@ class ObservationSpace:
         stocks = np.array(
             [gamestate.players[i].stock for i in list(gamestate.players.keys())]
         )
-        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:]) or self.current_frame > 28500
+        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
         
         state1 = state_preprocess(gamestate, 1, platform=False)
         state2 = state_preprocess(gamestate, 2, platform=False)
@@ -107,7 +106,6 @@ class PlatformObservationSpace:
         reward = (0, 0)
         info = None
         self.current_gamestate = gamestate
-        self.current_frame += 1
         self.player_count = len(list(gamestate.players.keys()))
         
         if self.previous_gamestate is not None:
@@ -170,7 +168,7 @@ class PlatformObservationSpace:
         stocks = np.array(
             [gamestate.players[i].stock for i in list(gamestate.players.keys())]
         )
-        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:]) or self.current_frame > 28500
+        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
         
         # state for player 1
         state1 = state_preprocess(gamestate, 1, platform=True)
@@ -257,6 +255,7 @@ class ActionSpace:
         if isinstance(action, list):
             return ControlState(action)
         # # when action is index of action space
+    
         return ControlState(self.to_controller(action))
     
 class ControlState:
@@ -274,7 +273,7 @@ class ControlState:
 
     def __call__(self, controller):
         controller.release_all()
-        for i in range(5):
+        for i in range(4):   
             if self.state[i]:
                 controller.press_button(self.buttons[i])
         controller.tilt_analog_unit(melee.enums.Button.BUTTON_MAIN,
