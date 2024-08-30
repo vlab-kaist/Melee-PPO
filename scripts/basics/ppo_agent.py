@@ -78,7 +78,7 @@ class PPOGRUAgent(PPO_RNN):
 
             actionable_landing = ai.action == Action.LANDING and ai.action_frame >= 4
 
-            #5 Crouch cancel?
+            #4 Crouch cancel?
             '''if ai.action in [Action.STANDING] or actionable_landing:  
                 if self.cc_test == "occ":
                     self.crouch_cancel(mode = 1)
@@ -87,26 +87,26 @@ class PPOGRUAgent(PPO_RNN):
                 else:
                     self.crouch_cancel(mode = 3)
             '''
-            #4 Do not over shield
+            #3 Do not over shield
             if ai.shield_strength < 10:
                 self.no_shield()
                 self.shield_charging = True
 
 
 
-            #3 L_cancel check
+            #2 L_cancel check
             if ai.speed_y_self < 0 and abs(ai.speed_y_self) > 2:
                 self.l_cancel_check()
-            #2 Grab Mash    
+            #A Grab Mash    
             if ai.action in [Action.GRABBED_WAIT_HIGH, Action.GRAB_PULLING_HIGH, Action.PUMMELED_HIGH, Action.GRAB_WAIT, Action.GRAB_PULL, Action.GRABBED, Action.GRAB_PUMMELED, Action.YOSHI_EGG, Action.CAPTURE_YOSHI, Action.THROWN_FORWARD, Action.THROWN_BACK, Action.THROWN_UP, Action.THROWN_DOWN, Action.THROWN_DOWN_2]:
                 self.mash_mode = True
             else:
                 self.mash_mode = False
-  
+            #2 Projectile shield
             if self.gamestate.projectiles:
                 for projectiles in self.gamestate.projectiles:
             
-                    if projectiles.type != enums.ProjectileType.ARROW and (abs(ai.position.x - projectiles.position.x) <= 25 and abs(ai.position.y - projectiles.position.y) <=10):
+                    if projectiles.type != enums.ProjectileType.ARROW and (abs(ai.position.x - projectiles.position.x) <= 25 and -1e-4< (projectiles.position.y - ai.position.y ) <=27):
                         if ai.shield_strength > 20 and not self.shield_charging:                            
                             self.emergency_shield()
             
