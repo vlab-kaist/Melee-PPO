@@ -9,7 +9,8 @@ import melee
 from melee import enums
 from melee.enums import Action, Character, Button
 import numpy as np
-from enum import Enum       
+from enum import Enum
+from heuristics.sdi import SDI
         
 class PPOGRUAgent(PPO_RNN):
     def __init__(self, agent_id=1, players=None, csv_path=None,
@@ -31,9 +32,17 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_mode = False
         self.macro_queue = []
         self.macro_idx = 0
+        
         self.side_b = False # for mario
         self.cyclone_luigi = False # for mario and luigi
         self.cyclone_mario = False
+        
+        self.mash_mode = False
+        self.mash_queue = [4,8,22,19]
+        self.mash_counter = 0
+        
+        self.sdi = None
+        self.shield_charging = False
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -43,18 +52,50 @@ class PPOGRUAgent(PPO_RNN):
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         if isinstance(self.gamestate, melee.gamestate.GameState):
             ai = self.gamestate.players[self.agent_id]
-            # TODO: consider case when cyclone is interrupted during frame 1-43
+            op = self.gamestate.players[3 - self.agent_id]
+            
+            # Priority : 1. Recovery & SDI (never possible simultaenously due to conditions) 2. Grab Mash 3. L_cancel 4. no_shield
+            if ai.shield_strength >= 40:
+                self.shield_charging = False
+            # initial sdi setup
+            if ai.hitlag_left <= 1:
+                self.sdi = None
+                
+            #3 Do not over shield
+            if ai.shield_strength < 10 and not self.training:
+                self.no_shield()
+                self.shield_charging = True
+            
+            #2 L_cancel check
+            if ai.speed_y_self < 0 and abs(ai.speed_y_self) > 2 and not self.training:
+                self.l_cancel_check()
+            
+            #A Grab Mash    
+            if ai.action in [Action.GRABBED_WAIT_HIGH, Action.GRAB_PULLING_HIGH, Action.PUMMELED_HIGH, Action.GRAB_WAIT, Action.GRAB_PULL, Action.GRABBED, Action.GRAB_PUMMELED, Action.YOSHI_EGG, Action.CAPTURE_YOSHI, Action.THROWN_FORWARD, Action.THROWN_BACK, Action.THROWN_UP, Action.THROWN_DOWN, Action.THROWN_DOWN_2]:
+                self.mash_mode = True
+            else:
+                self.mash_mode = False
+            
+            # Related aspects to recovery
             if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH): # cyclone is charged when down b occurs on ground
                 self.cyclone_luigi = False
             if ai.on_ground:
                 self.cyclone_mario = False
             if ai.on_ground or not ai.off_stage:
                 self.side_b = False
-            
+
             if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
                 self.macro_mode = False
                 self.macro_queue = []
                 self.macro_idx = 0
+            
+            elif ai.hitlag_left > 1 and not self.training:
+                op = self.gamestate.players[3 - self.agent_id]
+                if self.sdi is None:
+                    self.sdi = SDI()
+                self.action = self.sdi.get_action(self.gamestate, ai, op)
+                #print(str(self.action)+ "\n")
+                return self.action, self._current_log_prob
 
             elif (not self.macro_mode) and ai.off_stage:
                 if ai.character in [Character.MARIO, Character.DOC]:
@@ -67,7 +108,19 @@ class PPOGRUAgent(PPO_RNN):
                     self.yoshi_recovery()
                 else:
                     self.luigi_recovery()
-        if self.macro_mode:
+
+        if self.mash_mode and not self.training:
+            #print("mash", self.cnt)
+            self.action = self.mash_queue[self.mash_idx]
+            self.prev = self.action
+            self.mash_idx += 1
+
+            if self.mash_idx == len(self.mash_queue):
+                self.mash_idx = 0 
+
+            return self.action, self._current_log_prob
+        
+        elif self.macro_mode:
             self.action = self.macro_queue[self.macro_idx]
             self.prev = self.action
             self.macro_idx += 1
@@ -78,6 +131,7 @@ class PPOGRUAgent(PPO_RNN):
                 self.action_cnt = 3 # initialize action queue
             self.action = torch.tensor(self.action).unsqueeze(0)
             return self.action, self._current_log_prob
+        
         else:
             if self.action_cnt >= self.delay : #or 21 <= self.prev <= 24: # 3
                 rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
@@ -109,6 +163,45 @@ class PPOGRUAgent(PPO_RNN):
     def record_transition(self, states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps):
         super().record_transition(states, actions, rewards, next_states, terminated, truncated, infos, timestep, timesteps)
         self.gamestate = infos["gamestate"]
+    
+    def l_cancel_check(self):
+        ai = self.gamestate.players[self.agent_id]
+        edge_pos = melee.stages.EDGE_GROUND_POSITION[self.gamestate.stage]
+
+        left_height, left_left, left_right = melee.left_platform_position(self.gamestate)
+        right_height, right_left, right_right = melee.right_platform_position(self.gamestate)
+        top_height, top_left, top_right = melee.top_platform_position(self.gamestate)
+
+        is_valid_action = ai.action in [Action.FALLING,Action.FALLING_FORWARD,Action.FALLING_BACKWARD,Action.FALLING_AERIAL,
+            Action.FALLING_AERIAL_FORWARD,Action.FALLING_AERIAL_BACKWARD,Action.DOWN_B_AIR,Action.SWORD_DANCE_1_AIR, 
+            Action.SWORD_DANCE_2_HIGH_AIR, Action.SWORD_DANCE_2_MID_AIR, Action.SWORD_DANCE_3_HIGH_AIR, 
+            Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_3_LOW_AIR, Action.SWORD_DANCE_4_HIGH_AIR, 
+            Action.SWORD_DANCE_4_MID_AIR, Action.SWORD_DANCE_4_LOW_AIR, Action.SPECIAL_FALL_FORWARD, Action.SPECIAL_FALL_BACK, 
+            Action.DOWNSMASH, Action.NAIR, Action.FAIR, Action.BAIR, Action.UAIR, Action.DAIR
+        ]
+
+        if (ai.position.y > -1e-4 and ai.position.y < 3) and (abs(ai.position.x) < edge_pos - 10 and is_valid_action):
+            self.macro_mode = True
+            self.macro_idx = 0
+            self.macro_queue = [19]
+            return
+        elif ((-1e-4 <ai.position.y - left_height < 3) or (-1e-4 <ai.position.y - top_height < 4) if top_height else top_height)and ((left_left <ai.position.x < left_right) or (right_left <ai.position.x < right_right)):
+            self.macro_mode = True
+            self.macro_idx = 0
+            self.macro_queue = [19]
+        else:
+            return
+    
+    def no_shield(self):
+        ai = self.gamestate.players[self.agent_id]
+        if ai.action in [Action.SHIELD, Action.SHIELD_REFLECT, Action.SHIELD_RELEASE]:
+            self.macro_mode = True
+            self.macro_queue = [22] #May change to random selectabel oos options
+            self.macro_idx = 0
+        else:
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
     
     def mario_recovery(self):
         # maybe optimal?
