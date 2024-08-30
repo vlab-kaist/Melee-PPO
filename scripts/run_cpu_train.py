@@ -9,10 +9,10 @@ from tqdm import tqdm
 
 # characters = ["DOC", "MARIO", "YOSHI", "LUIGI", "PIKACHU", "LINK"]
 # stages = ["BATTLEFIELD", "FINAL_DESTINATION", "POKEMON_STADIUM"]
-character = "LINK"
-stage = "BATTLEFIELD"
+character = "PIKACHU"
+stage = "POKEMON_STADIUM"
 script_path = "./cpu_train.py"
-iso = "/home/tgkang/ssbm.iso"
+iso = "E:/Projects/ssbm.iso"
 save_dir = "./LINK_BF"
 init_timestep = 0
 timesteps = 18000
@@ -22,7 +22,7 @@ model_path = None
 real_freq = timesteps * 50
 
 recent_model = os.path.join(save_dir, "checkpoints", "recent_model.pt")
-
+print(recent_model)
 def kill_dolphin():
     current_user = os.getlogin()  
     for proc in psutil.process_iter(['pid', 'username', 'name']):

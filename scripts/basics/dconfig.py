@@ -86,11 +86,11 @@ class DolphinConfig:
 
         if interface == "vulkan":
             config = configparser.ConfigParser()
-            config.readfp(open(self.config_path))
+            config.read_file(open(self.config_path))
             config["Core"]["gfxbackend"] = "Vulkan"
         else:
             config = configparser.ConfigParser()
-            config.readfp(open(self.config_path))
+            config.read_file(open(self.config_path))
             config["Core"]["gfxbackend"] = ""
 
             with open(str(self.config_path), "w") as outfile:
@@ -165,7 +165,7 @@ class DolphinConfig:
             )
 
         config = configparser.ConfigParser()
-        config.readfp(open(self.config_path))
+        config.read_file(open(self.config_path))
         config["Core"][f"sidevice{str(port-1)}"] = f"{controller_type.value}"
 
         with open(str(self.config_path), "w") as outfile:

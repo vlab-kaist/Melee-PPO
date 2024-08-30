@@ -272,13 +272,14 @@ def state_preprocess(gamestate, agent_id, platform=False):
             enums.ProjectileType.DR_MARIO_CAPSULE: 1,
             enums.ProjectileType.LINK_BOMB: 2,
             enums.ProjectileType.LINK_HOOKSHOT: 3,
-            enums.ProjectileType.LINK_ARROW: 4,
+            enums.ProjectileType.ARROW: 4, #LINK ARROW
             enums.ProjectileType.PIKACHU_THUNDER: 5,
             enums.ProjectileType.MARIO_CAPE: 6,
             enums.ProjectileType.DR_MARIO_CAPE: 7,
             enums.ProjectileType.YOSHI_EGG_THROWN: 8,
             enums.ProjectileType.YOSHI_TONGUE: 9,
-            enums.ProjectileType.YOSHI_STAR: 10,
+            enums.ProjectileType.LINK_BOOMERANG: 10,
+            #enums.ProjectileType.YOSHI_STAR: 10,
             enums.ProjectileType.PIKACHU_THUNDERJOLT_1: 11,
             enums.ProjectileType.PIKACHU_THUNDERJOLT_2: 12,
             enums.ProjectileType.LUIGI_FIRE: 13
@@ -296,7 +297,7 @@ def state_preprocess(gamestate, agent_id, platform=False):
     if not platform:
         state = np.zeros((864,), dtype=np.float32)
     else:
-        state = np.zeros((880,), dtype=np.float32)
+        state = np.zeros((888,), dtype=np.float32)
         
     state[0] = p1.position.x / edge_pos
     state[1] = p1.position.y / edge_pos
@@ -396,5 +397,13 @@ def state_preprocess(gamestate, agent_id, platform=False):
         state[877] = (abs(p2.position.x) - top_right) / edge_pos if top_height is not None else 0
         state[878] = (p1.position.y - top_height) / top_height if top_height is not None else 0
         state[879] = (p2.position.y - top_height) / top_height if top_height is not None else 0
-        
+        state[880] = 1.0 if p2.character == enums.Character.DOC else 0
+        state[881] = 1.0 if p2.character == enums.Character.MARIO else 0
+        state[882] = 1.0 if p2.character == enums.Character.LINK else 0
+        state[883] = 1.0 if p2.character == enums.Character.LUIGI else 0
+        state[884] = 1.0 if p2.character == enums.Character.YOSHI else 0
+        state[885] = 1.0 if p2.character == enums.Character.PIKACHU else 0
+        state[886] = p1.position.x - p2.position.x
+        state[887] = p1.position.y - p2.position.y
+     
     return state

@@ -33,7 +33,9 @@ class PPOGRUAgent(PPO_RNN):
         self.macro_idx = 0
         self.side_b = False # for mario
         self.cyclone = False # for mario and luigi
-        
+        self.action_list = []
+        self.action_preserve = []
+    
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
         if not isinstance(states, torch.Tensor):
@@ -41,8 +43,53 @@ class PPOGRUAgent(PPO_RNN):
             states = self.state_preprocess(states)
             states = torch.tensor(states, device=self.device, dtype=torch.float32).view(1, -1)
         if isinstance(self.gamestate, melee.gamestate.GameState):
+            
             ai = self.gamestate.players[self.agent_id]
-                        
+            #print(type(ai.iasa))
+            useless_action = [Action.ENTRY, Action.ENTRY_START, Action.ENTRY_END, Action.ON_HALO_DESCENT, Action.DEAD_LEFT, Action.DEAD_DOWN, Action.DEAD_RIGHT]
+            IASA = [
+                Action.DAIR,
+                Action.DOWNTILT,
+                Action.DOWNSMASH,
+                Action.UPSMASH,
+            ]
+            all_action = [Action.ON_HALO_WAIT,Action.STANDING, Action.DASHING, Action.FALLING, Action.TURNING, Action.RUNNING, Action.WALK_FAST, Action.WALK_MIDDLE, Action.WALK_SLOW, Action.FALLING_AERIAL, Action.DEAD_FLY_STAR]
+            jump_action = [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD, Action.JUMPING_ARIAL_BACKWARD, Action.JUMPING_ARIAL_FORWARD]
+            move_only = [Action.NAIR, Action.FAIR, Action.BAIR, Action.UAIR]
+            move_only += [Action.SWORD_DANCE_3_MID, Action.SWORD_DANCE_1_AIR, Action.SWORD_DANCE_3_LOW]
+            no_action = [Action.SWORD_DANCE_2_HIGH_AIR, Action.DOWN_B_GROUND, Action.DOWN_B_GROUND_START, Action.SWORD_DANCE_3_MID_AIR, Action.SHINE_TURN, Action.SWORD_DANCE_3_LOW_AIR] #Down B
+            no_action += [Action.LASER_GUN_PULL, Action.NEUTRAL_B_CHARGING] #B
+            no_action += [Action.SWORD_DANCE_4_MID, Action.SWORD_DANCE_4_LOW, Action.SWORD_DANCE_4_HIGH] # UP b
+            no_action += [Action.DEAD_FALL]
+            no_action += [Action.KNEE_BEND] #When jumping, character bend their knee
+            
+            airdodge = [Action.AIRDODGE] #Except Link, airdodge is no_action
+            all_action += [Action.LANDING]
+            a_action = [Action.NEUTRAL_ATTACK_1]
+            b_action = [Action.NEUTRAL_B_FULL_CHARGE,Action.NEUTRAL_B_FULL_CHARGE_AIR, Action.SWORD_DANCE_1]
+            #b_action = [Action.NEUTRAL_B_FULL_CHARGE, Action.NEUTRAL_B_FULL_CHARGE_AIR]
+            no_action += [Action.SWORD_DANCE_2_MID, Action.NEUTRAL_B_ATTACKING_AIR, Action.NEUTRAL_B_ATTACKING, Action.NEUTRAL_B_CHARGING_AIR, Action.SWORD_DANCE_2_HIGH, Action.SWORD_DANCE_3_HIGH] #rocket CHARGING_AIR -> ENDS
+            no_action += [Action.LANDING_SPECIAL, Action.FTILT_MID, Action.DASH_ATTACK, Action.CROUCH_END, Action.GRAB]
+            no_action += [Action.DAMAGE_FLY_NEUTRAL]
+            no_action += [Action.ROLL_FORWARD, Action.ROLL_BACKWARD]
+            #special = {
+            #    Action.NEUTRAL_ATTACK_1 : ("NO", 5, "A"),
+            #    Action.LANDING : ("NO", 5, "ALL") # Depending on what action before landing, hitstun changes. NEED TO FIX.
+            #}
+            no_hor_move = [Action.CROUCH_START]
+            move_only += [Action.CROUCHING, Action.CROUCH_END]
+            no_action += [Action.BAIR_LANDING, Action.DAIR_LANDING, Action.UAIR_LANDING, Action.FAIR_LANDING, Action.NAIR_LANDING]
+            no_action += [Action.FSMASH_MID, Action.GRAB_RUNNING, Action.UPTILT]
+            all_action += [Action.EDGE_HANGING, Action.SHIELD]
+            no_action += [Action.SHIELD_BREAK_FLY,Action.SHIELD_BREAK_DOWN_U, Action.SHIELD_BREAK_STAND_U, Action.SHIELD_BREAK_TEETER]
+            damage_action = [Action.DAMAGE_AIR_2]
+            edge_action = [Action.EDGE_ATTACK_QUICK]
+            if(ai.hitstun_frames_left > 0):
+                print(ai.hitstun_frames_left)
+            if(not ai.action in useless_action +all_action+ IASA + move_only + no_action + jump_action + a_action + airdodge + b_action + no_hor_move):
+                print(ai.action, self.gamestate.frame)
+            
+            
             if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH) or ai.action.value <= 10: # cyclone is charged when down b occurs on ground
                 self.cyclone = False
             if ai.on_ground or not ai.off_stage:
@@ -74,10 +121,12 @@ class PPOGRUAgent(PPO_RNN):
             self.action = torch.tensor(self.action).unsqueeze(0)
             return self.action, self._current_log_prob
         else:
-            if self.action_cnt >= self.delay : #or 21 <= self.prev <= 24: # 3
+            if(ai.character == Character.PIKACHU):
+                
                 rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
                 actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
                 self._current_log_prob = log_prob
+                #print(self._current_log_prob)
                 if not self.training:
                     prob = F.softmax(outputs["net_output"] / self.tou, dim=-1)
                     # prevent suicide action
@@ -88,13 +137,39 @@ class PPOGRUAgent(PPO_RNN):
                 else:
                     self.action = actions
                 self.action_cnt = 1
-                
+                if(ai.action in no_action + IASA + useless_action + airdodge):
+                    self.action = 0
+                if(ai.hitstun_frames_left > 0):
+                    self.action = 0
+                if(ai.jumps_left > 0 and self.action in [20,21,22,23,24]):
+                    self.action = 0
                 if self._rnn:
                     self._rnn_final_states["policy"] = outputs.get("rnn", [])
+                self.prev = self.action
+                return self.action, self._current_log_prob
             else:
-                self.action_cnt += 1
-            self.prev = self.action
-            return self.action, self._current_log_prob
+                if self.action_cnt >= self.delay : #or 21 <= self.prev <= 24: # 3
+                    rnn = {"rnn": self._rnn_initial_states["policy"]} if self._rnn else {}
+                    actions, log_prob, outputs = self.policy.act({"states": self._state_preprocessor(states), **rnn}, role="policy")
+                    self._current_log_prob = log_prob
+                    #print(self._current_log_prob)
+                    if not self.training:
+                        prob = F.softmax(outputs["net_output"] / self.tou, dim=-1)
+                        # prevent suicide action
+                        if isinstance(self.gamestate, melee.gamestate.GameState):
+                            prob = self.mask_suicide_action(prob)
+                        self.action = torch.multinomial(prob, num_samples=1).unsqueeze(0)
+                        # self.action = torch.argmax(outputs["net_output"]).unsqueeze(0)
+                    else:
+                        self.action = actions
+                    self.action_cnt = 1
+                    
+                    if self._rnn:
+                        self._rnn_final_states["policy"] = outputs.get("rnn", [])
+                else:
+                    self.action_cnt += 1
+                self.prev = self.action
+                return self.action, self._current_log_prob
             #return torch.tensor(0).unsqueeze(0) if self.agent_id == 1 else self.action, self._current_log_prob
     
     def state_preprocess(self, gamestate):

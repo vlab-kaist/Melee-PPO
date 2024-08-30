@@ -33,7 +33,7 @@ from basics.model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
+    "--iso", default="E:/Projects/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 parser.add_argument(
     "--char", default=None, type=str, help="my character"

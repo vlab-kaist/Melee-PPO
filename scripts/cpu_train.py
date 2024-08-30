@@ -29,7 +29,7 @@ from basics.model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
+    "--iso", default="E:/Projects/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 parser.add_argument(
     "--save_dir", default=None, type=str, help="Where to save checkpoint and log"
@@ -68,7 +68,7 @@ def make_env(id, cpu_lvl):
             "iso_path": iso_path,
             "players": players,
             "agent_id": 1, # for 1p,
-            "n_states": 864 if args.stage == "FINAL_DESTINATION" else 880,
+            "n_states": 864 if args.stage == "FINAL_DESTINATION" else 888,
             "n_actions": 36,
             "save_replay": False,
             "stage": getattr(enums.Stage, args.stage),

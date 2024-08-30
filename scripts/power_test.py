@@ -23,6 +23,7 @@ import os
 import csv
 import psutil
 
+
 import melee
 from melee import enums
 from basics.env import *
@@ -33,7 +34,7 @@ from basics.model import Policy, Value, GRUPolicy, GRUValue
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--iso", default="/home/tgkang/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
+    "--iso", default="E:/Projects/ssbm.iso", type=str, help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
 )
 parser.add_argument(
     "--char", default=None, type=str, help="my character"
@@ -139,6 +140,7 @@ class Powertest:
                     op_action, _ = op_ppo.act(state, 1, 0)
             next_state, reward, done, truncated, info = env.step((action, op_action))
             state = next_state
+        print(agent_ppo.action_list)
         env.close()
         if state.player[1].stock > state.player[2].stock:
             return 1
