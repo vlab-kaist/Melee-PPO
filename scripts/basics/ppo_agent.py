@@ -50,7 +50,7 @@ class PPOGRUAgent(PPO_RNN):
         self.cnt = 0
 
         
-    # Priority : 1. Recovery & SDI (never possible simultaenously due to conditions) 2. Grab Mash 3. L_cancel 4. no_shield  
+    # Priority : A has the highest priority; mash. Number has the priority in order, and 1 has same priority with A, since not having same condition with A.
     def act(self, states, timestep: int, timesteps: int):
         self.cnt += 1
         #if env is not myenv, env gives gamestate itself to an agent
@@ -103,10 +103,9 @@ class PPOGRUAgent(PPO_RNN):
             else:
                 self.mash_mode = False
             #2 Projectile shield
-            if self.gamestate.projectiles:
+            if self.gamestate.projectiles and self.proj_test:
                 for projectiles in self.gamestate.projectiles:
-            
-                    if projectiles.type != enums.ProjectileType.ARROW and (abs(ai.position.x - projectiles.position.x) <= 25 and -1e-4< (projectiles.position.y - ai.position.y ) <=27):
+                    if (projectiles.type != enums.ProjectileType.ARROW and projectiles.owner != self.agent_id) and (abs(ai.position.x - projectiles.position.x) <= 25 and  -1 < (projectiles.position.y - ai.position.y) <=27):
                         if ai.shield_strength > 20 and not self.shield_charging:                            
                             self.emergency_shield()
             
