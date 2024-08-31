@@ -40,6 +40,7 @@ class PPOGRUAgent(PPO_RNN):
         self.mash_mode = False
         self.mash_queue = [4,8,22,19]
         self.mash_counter = 0
+        self.mash_idx = 0
         
         self.sdi = None
         self.shield_charging = False
@@ -75,6 +76,13 @@ class PPOGRUAgent(PPO_RNN):
                 self.mash_mode = True
             else:
                 self.mash_mode = False
+            
+            #2 Projectile shield
+            if self.gamestate.projectiles and not self.training:
+                for projectiles in self.gamestate.projectiles:
+                    if (projectiles.type != enums.ProjectileType.ARROW and projectiles.owner != self.agent_id) and (abs(ai.position.x - projectiles.position.x) <= 25 and  -1 < (projectiles.position.y - ai.position.y) <=27):
+                        if ai.shield_strength > 20 and not self.shield_charging:                            
+                            self.emergency_shield()
             
             # Related aspects to recovery
             if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH): # cyclone is charged when down b occurs on ground
@@ -184,13 +192,10 @@ class PPOGRUAgent(PPO_RNN):
             self.macro_mode = True
             self.macro_idx = 0
             self.macro_queue = [19]
-            return
         elif ((-1e-4 <ai.position.y - left_height < 3) or (-1e-4 <ai.position.y - top_height < 4) if top_height else top_height)and ((left_left <ai.position.x < left_right) or (right_left <ai.position.x < right_right)):
             self.macro_mode = True
             self.macro_idx = 0
             self.macro_queue = [19]
-        else:
-            return
     
     def no_shield(self):
         ai = self.gamestate.players[self.agent_id]
@@ -202,6 +207,13 @@ class PPOGRUAgent(PPO_RNN):
             self.macro_mode = False
             self.macro_idx = 0
             self.macro_queue = []
+    
+    def emergency_shield(self):
+        ai = self.gamestate.players[self.agent_id]
+        if ai.on_ground:
+            self.macro_mode = True
+            self.macro_queue = [19] * 2
+            self.macro_idx = 0
     
     def mario_recovery(self):
         # maybe optimal?
@@ -360,14 +372,14 @@ Action.EDGE_GETUP_QUICK, Action.EDGE_ATTACK_SLOW, Action.EDGE_ATTACK_QUICK, Acti
         elif ai.jumps_left > 0: #jump
             self.macro_queue = [21] if is_left else [20]
         else: 
-            if 0 < edge_diff < 25 and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD, 
+            if 0 < edge_diff < 25 and ai.speed_air_x_self != 0 and not ai.action in [Action.JUMPING_FORWARD, Action.JUMPING_BACKWARD, 
                                                         Action.JUMPING_ARIAL_FORWARD, Action.JUMPING_ARIAL_BACKWARD]:
                 self.macro_queue = [2] if is_left else [1]
                 x, y = ai.position.x, ai.position.y
                 vx, vy = ai.speed_air_x_self, ai.speed_y_self
                 t = melee.stages.EDGE_POSITION[self.gamestate.stage] / abs(vx)
                 ny = y + vy * t - 0.5 * 0.093 * t ** 2
-                if ny < -3 and (vx > 0 if is_left else vx < 0): # airdodge
+                if ny < 5 and (vx > 0 if is_left else vx < 0): # airdodge
                     self.macro_queue = [35] if is_left else [34]
                 else:
                     self.macro_queue = [2] if is_left else [1]
