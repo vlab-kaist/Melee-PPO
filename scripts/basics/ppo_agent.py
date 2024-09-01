@@ -245,9 +245,9 @@ class PPOGRUAgent(PPO_RNN):
                 
                 elif ai.position.y < -30: # up b
                     diff = abs(ai.position.x) - edge_pos
-                    if diff > 10:
+                    if diff > 20:
                         self.macro_queue = [14, 2] if is_left else [13, 1]
-                    elif diff < -10:
+                    elif diff < -20:
                         self.macro_queue = [13, 2] if is_left else [14, 1]
                     else:
                         self.macro_queue = [12, 0]
