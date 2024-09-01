@@ -81,6 +81,7 @@ class Selfplay:
         self.exp_name = exp_name
         self.save_dir = os.path.abspath(os.path.join('.', exp_name, "checkpoints"))
         self.recent_model = os.path.join(self.save_dir, "recent_model.pt")
+        self.best_model = os.path.join(self.save_dir, "best_agent.pt")
         if not os.path.exists(os.path.join('.', exp_name)):
             os.makedirs(os.path.join('.', exp_name))
         if not os.path.exists(self.save_dir):
@@ -121,14 +122,14 @@ class Selfplay:
         #prev_model_path = os.path.join(self.save_dir, "agent_0.pt") #random.choice(self.models.get(self.char))
         prev_model_path = self.models.get(self.char)[-1]
         wins, loses = 0, 0
-        for _ in range(5):
+        for _ in range(3):
             kill_dolphin()
             w, l = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=2)
             wins += w; loses += l
         #wins, loses = self.parallel_match(self.char, new_model, self.char, prev_model_path, self.stage, parallel_num=10)
         kill_dolphin()
         print(f"{self.char} wins: {wins} , loses {loses}")
-        if wins >= 6:
+        if wins >= 4:
             return True
         else:
             return False
@@ -142,7 +143,7 @@ class Selfplay:
                 stderr=subprocess.PIPE,
                 text=True
             )
-            stdout, stderr = process.communicate(timeout=60 * 5)
+            stdout, stderr = process.communicate(timeout=60 * 6)
             return_code = process.returncode
 
             if return_code != 0:
@@ -256,7 +257,7 @@ if __name__ == "__main__":
     trainers = {}
     chars =["LUIGI", "LINK", "PIKACHU", "MARIO", "YOSHI"]
     for char in chars:    
-        model_path = f"/home/tgkang/saved_model/selfplay_BF_0/{char}_BF.pt"
+        model_path = f"/home/tgkang/saved_model/Selfplay_BF_1/{char}.pt"
         trainers[char] = Selfplay(model_path=model_path, exp_name=f"../SelfplayBF/{char}", char=char, models=models)
     
     for i in range(MAX_NUMS):
@@ -280,17 +281,29 @@ if __name__ == "__main__":
                 if not s.init_timestep % s.save_freq == 0:
                     os.remove(new_model)
                 else:
-                    if not s.can_release(new_model):
-                        os.remove(new_model)
-                        continue
-                    print(f":::Release new agent: {new_model}")
-                    s.models.push(char, new_model)
+                    if s.can_release(new_model):
+                        print(f":::Release new agent: {new_model}")
+                        s.models.push(char, new_model)
+                    else:
+                        # check best model
+                        if os.path.exists(s.best_model) and s.can_release(s.best_model):
+                            print(f":::Release new agent: {new_model}")
+                            shutil.copy2(s.best_model, new_model)
+                            s.models.push(char, new_model)
+                        else:
+                            os.remove(new_model)
             # when process is terminated before evaluation
             elif s.init_timestep % s.save_freq == 0:
                 shutil.copy2(s.recent_model, new_model)
-                if not s.can_release(new_model):
-                    os.remove(new_model)
-                    continue
-                print(f":::Release new agent: {new_model}")
-                s.models.push(char, new_model)
+                if s.can_release(new_model):
+                    print(f":::Release new agent: {new_model}")
+                    s.models.push(char, new_model)
+                else:
+                    # check best model
+                    if os.path.exists(s.best_model) and s.can_release(s.best_model):
+                        print(f":::Release new agent: {new_model}")
+                        shutil.copy2(s.best_model, new_model)
+                        s.models.push(char, new_model)
+                    else:
+                        os.remove(new_model)
         kill_dolphin()
