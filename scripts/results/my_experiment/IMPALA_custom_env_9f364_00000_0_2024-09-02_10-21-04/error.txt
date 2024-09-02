@@ -1,0 +1,11 @@
+Failure # 1 (occurred at 2024-09-02_10-21-06)
+The actor died because of an error raised in its creation task, [36mray::IMPALA.__init__()[39m (pid=3863934, ip=143.248.233.21, actor_id=b47db5f6cbd2ddd2b246a81801000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 502, in __init__
+    config.validate()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 385, in validate
+    super().validate()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm_config.py", line 831, in validate
+    self._validate_resources_settings()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm_config.py", line 3998, in _validate_resources_settings
+    raise ValueError(
+ValueError: Can't set both `num_cpus_per_learner` > 1 and  `num_gpus_per_learner` > 0! Either set `num_cpus_per_learner` > 1 (and `num_gpus_per_learner`=0) OR set `num_gpus_per_learner` > 0 (and leave `num_cpus_per_learner` at its default value of 1). This is due to issues with placement group fragmentation. See https://github.com/ray-project/ray/issues/35409 for more details.

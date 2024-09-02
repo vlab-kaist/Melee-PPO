@@ -1,0 +1,29 @@
+Failure # 1 (occurred at 2024-09-02_10-33-34)
+The actor died because of an error raised in its creation task, [36mray::IMPALA.__init__()[39m (pid=3925777, ip=143.248.233.21, actor_id=d8e8b9ce11a3afb603ed11ef01000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 259, in _setup
+    self.add_workers(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 792, in add_workers
+    raise result.get()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 500, in _fetch_result
+    result = ray.get(ready)
+ray.exceptions.ActorDiedError: The actor died because of an error raised in its creation task, [36mray::RolloutWorker.__init__()[39m (pid=3926312, ip=143.248.233.21, actor_id=d1040fecaa7b074eced55d7b01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x77705b967070>)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 563, in __init__
+    self.async_env: BaseEnv = convert_to_base_env(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/base_env.py", line 456, in convert_to_base_env
+    raise ValueError(
+ValueError: Remote envs only make sense to use if num_envs > 1 (i.e. environment vectorization is enabled).
+
+During handling of the above exception, another exception occurred:
+
+[36mray::IMPALA.__init__()[39m (pid=3925777, ip=143.248.233.21, actor_id=d8e8b9ce11a3afb603ed11ef01000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 573, in __init__
+    super().__init__(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 158, in __init__
+    self.setup(copy.deepcopy(self.config))
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 579, in setup
+    super().setup(config)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 659, in setup
+    self.env_runner_group = EnvRunnerGroup(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 211, in __init__
+    raise e.args[0].args[2]
+ValueError: Remote envs only make sense to use if num_envs > 1 (i.e. environment vectorization is enabled).

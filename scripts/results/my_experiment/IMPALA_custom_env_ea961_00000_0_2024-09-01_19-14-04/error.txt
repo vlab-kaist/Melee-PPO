@@ -1,0 +1,48 @@
+Failure # 1 (occurred at 2024-09-01_19-14-15)
+[36mray::IMPALA.train()[39m (pid=2073129, ip=143.248.233.21, actor_id=8042340ec93f9db5fb715e8901000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 331, in train
+    raise skipped from exception_cause(skipped)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 328, in train
+    result = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 951, in step
+    train_results, train_iter_ctx = self._run_one_training_iteration()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 3600, in _run_one_training_iteration
+    training_step_results = self.training_step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 653, in training_step
+    return self._training_step_old_api_stack()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1030, in _training_step_old_api_stack
+    self._get_samples_from_workers_old_and_hybrid_api_stack(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1114, in _get_samples_from_workers_old_and_hybrid_api_stack
+    ] = self.env_runner_group.fetch_ready_async_reqs(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 1044, in fetch_ready_async_reqs
+    _handle_remote_call_result_errors(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 1254, in _handle_remote_call_result_errors
+    raise r.get()
+ray.exceptions.RayTaskError(AttributeError): [36mray::RolloutWorker.apply()[39m (pid=2073278, ip=143.248.233.21, actor_id=10f223f0f46dce541d287f2301000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x732963857130>)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 192, in apply
+    raise e
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 181, in apply
+    return func(self, *args, **kwargs)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1110, in <lambda>
+    lambda worker: worker.sample()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 678, in sample
+    batches = [self.input_reader.next()]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/sampler.py", line 91, in next
+    batches = [self.get_data()]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/sampler.py", line 273, in get_data
+    item = next(self._env_runner)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 348, in run
+    outputs = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 367, in step
+    ) = self._base_env.poll()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/multi_agent_env.py", line 634, in poll
+    ) = env_state.poll()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/multi_agent_env.py", line 837, in poll
+    self.reset()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/multi_agent_env.py", line 921, in reset
+    raise e
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/multi_agent_env.py", line 915, in reset
+    obs_and_infos = self.env.reset(seed=seed, options=options)
+  File "/home/yoshi/super-smash-bros-melee-reinforcement-learning/train/test_template_multispace.py", line 193, in reset
+    gamestate=gamestate, controller=self.controller
+AttributeError: 'CustomSSBMMultiAgentEnv' object has no attribute 'controller'

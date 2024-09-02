@@ -1,0 +1,48 @@
+Failure # 1 (occurred at 2024-09-01_22-26-38)
+[36mray::IMPALA.train()[39m (pid=2738065, ip=143.248.233.21, actor_id=580e9f2037e6db3d81e0028201000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 331, in train
+    raise skipped from exception_cause(skipped)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 328, in train
+    result = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 951, in step
+    train_results, train_iter_ctx = self._run_one_training_iteration()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 3600, in _run_one_training_iteration
+    training_step_results = self.training_step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 653, in training_step
+    return self._training_step_old_api_stack()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1030, in _training_step_old_api_stack
+    self._get_samples_from_workers_old_and_hybrid_api_stack(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1114, in _get_samples_from_workers_old_and_hybrid_api_stack
+    ] = self.env_runner_group.fetch_ready_async_reqs(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 1044, in fetch_ready_async_reqs
+    _handle_remote_call_result_errors(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 1254, in _handle_remote_call_result_errors
+    raise r.get()
+ray.exceptions.RayTaskError(ConnectionResetError): [36mray::RolloutWorker.apply()[39m (pid=2738563, ip=143.248.233.21, actor_id=8c27494f217e24313846460f01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x725e8eb3f1f0>)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 192, in apply
+    raise e
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 181, in apply
+    return func(self, *args, **kwargs)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1110, in <lambda>
+    lambda worker: worker.sample()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 678, in sample
+    batches = [self.input_reader.next()]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/sampler.py", line 91, in next
+    batches = [self.get_data()]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/sampler.py", line 273, in get_data
+    item = next(self._env_runner)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 348, in run
+    outputs = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 404, in step
+    self._base_env.send_actions(actions_to_send)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/multi_agent_env.py", line 657, in send_actions
+    raise e
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/multi_agent_env.py", line 646, in send_actions
+    obs, rewards, terminateds, truncateds, infos = env.step(agent_dict)
+  File "/home/yoshi/super-smash-bros-melee-reinforcement-learning/train/test_template_multispace.py", line 352, in step
+    frame = self._observe_frame(gamestate.frame)
+  File "/home/yoshi/super-smash-bros-melee-reinforcement-learning/train/test_template_multispace.py", line 435, in _observe_frame
+    return msgpack.unpackb(self.recv_msg(self.sock))
+  File "/home/yoshi/super-smash-bros-melee-reinforcement-learning/train/test_template_multispace.py", line 549, in recv_msg
+    raw_msglen = sock.recv(4)
+ConnectionResetError: [Errno 104] Connection reset by peer

@@ -1,0 +1,8 @@
+Failure # 1 (occurred at 2024-09-02_11-16-13)
+The actor died unexpectedly before finishing this task.
+	class_name: IMPALA
+	actor_id: 536b8d21fb2fa6fbd952025501000000
+	pid: 4044109
+	namespace: 83ef82f9-bcb7-4423-8837-d73768aa8837
+	ip: 143.248.233.21
+The actor is dead because its owner has died. Owner Id: 01000000ffffffffffffffffffffffffffffffffffffffffffffffff Owner Ip address: 143.248.233.21 Owner worker exit type: SYSTEM_ERROR Worker exit detail: Owner's node has crashed.

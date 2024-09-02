@@ -1,0 +1,52 @@
+Failure # 1 (occurred at 2024-09-01_19-16-02)
+[36mray::IMPALA.train()[39m (pid=2084878, ip=143.248.233.21, actor_id=2fd6faf52deac74f9e16071201000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 331, in train
+    raise skipped from exception_cause(skipped)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 328, in train
+    result = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 951, in step
+    train_results, train_iter_ctx = self._run_one_training_iteration()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 3600, in _run_one_training_iteration
+    training_step_results = self.training_step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 653, in training_step
+    return self._training_step_old_api_stack()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1030, in _training_step_old_api_stack
+    self._get_samples_from_workers_old_and_hybrid_api_stack(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1114, in _get_samples_from_workers_old_and_hybrid_api_stack
+    ] = self.env_runner_group.fetch_ready_async_reqs(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 1044, in fetch_ready_async_reqs
+    _handle_remote_call_result_errors(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 1254, in _handle_remote_call_result_errors
+    raise r.get()
+ray.exceptions.RayTaskError(ValueError): [36mray::RolloutWorker.apply()[39m (pid=2085005, ip=143.248.233.21, actor_id=4c5482630e10ff52dd5e719401000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x702a4b81f100>)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 192, in apply
+    raise e
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 181, in apply
+    return func(self, *args, **kwargs)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1110, in <lambda>
+    lambda worker: worker.sample()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 678, in sample
+    batches = [self.input_reader.next()]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/sampler.py", line 91, in next
+    batches = [self.get_data()]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/sampler.py", line 273, in get_data
+    item = next(self._env_runner)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 348, in run
+    outputs = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 374, in step
+    active_envs, to_eval, outputs = self._process_observations(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/env_runner_v2.py", line 641, in _process_observations
+    processed = policy.agent_connectors(acd_list)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/connectors/agent/pipeline.py", line 41, in __call__
+    ret = c(ret)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/connectors/connector.py", line 265, in __call__
+    return [self.transform(d) for d in acd_list]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/connectors/connector.py", line 265, in <listcomp>
+    return [self.transform(d) for d in acd_list]
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/connectors/agent/obs_preproc.py", line 55, in transform
+    d[SampleBatch.NEXT_OBS] = self._preprocessor.transform(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/models/preprocessors.py", line 213, in transform
+    self.check_shape(observation)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/models/preprocessors.py", line 71, in check_shape
+    raise ValueError(
+ValueError: Observation ([  0 485  39 ...  -1  -1   3] dtype=int32) outside given space (Box(0, 65535, (1025,), int32))!

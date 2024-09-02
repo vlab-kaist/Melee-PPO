@@ -1,0 +1,47 @@
+Failure # 1 (occurred at 2024-09-02_11-38-15)
+The actor died because of an error raised in its creation task, [36mray::IMPALA.__init__()[39m (pid=4150673, ip=143.248.233.21, actor_id=4d68fbc990fa22531011097101000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 259, in _setup
+    self.add_workers(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 792, in add_workers
+    raise result.get()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/actor_manager.py", line 500, in _fetch_result
+    result = ray.get(ready)
+ray.exceptions.ActorDiedError: The actor died because of an error raised in its creation task, [36mray::RolloutWorker.__init__()[39m (pid=4150965, ip=143.248.233.21, actor_id=00314f0a0f265a31353b859e01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x780f5fd0efb0>)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 523, in __init__
+    self._update_policy_map(policy_dict=self.policy_dict)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 1744, in _update_policy_map
+    self._build_policy_map(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/evaluation/rollout_worker.py", line 1855, in _build_policy_map
+    new_policy = create_policy_for_framework(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/utils/policy.py", line 108, in create_policy_for_framework
+    return policy_class(observation_space, action_space, merged_config)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala_torch_policy.py", line 263, in __init__
+    TorchPolicyV2.__init__(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/policy/torch_policy_v2.py", line 156, in __init__
+    self.model_gpu_towers.append(model_copy.to(self.devices[i]))
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/torch/nn/modules/module.py", line 989, in to
+    return self._apply(convert)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/torch/nn/modules/module.py", line 641, in _apply
+    module._apply(fn)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/torch/nn/modules/module.py", line 641, in _apply
+    module._apply(fn)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/torch/nn/modules/rnn.py", line 194, in _apply
+    self.flatten_parameters()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/torch/nn/modules/rnn.py", line 180, in flatten_parameters
+    torch._cudnn_rnn_flatten_weight(
+RuntimeError: cuDNN error: CUDNN_STATUS_NOT_INITIALIZED
+
+During handling of the above exception, another exception occurred:
+
+[36mray::IMPALA.__init__()[39m (pid=4150673, ip=143.248.233.21, actor_id=4d68fbc990fa22531011097101000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 573, in __init__
+    super().__init__(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 158, in __init__
+    self.setup(copy.deepcopy(self.config))
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 579, in setup
+    super().setup(config)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 659, in setup
+    self.env_runner_group = EnvRunnerGroup(
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/env/env_runner_group.py", line 211, in __init__
+    raise e.args[0].args[2]
+RuntimeError: cuDNN error: CUDNN_STATUS_NOT_INITIALIZED

@@ -1,0 +1,15 @@
+Failure # 1 (occurred at 2024-09-02_09-47-03)
+[36mray::IMPALA.train()[39m (pid=3719553, ip=143.248.233.21, actor_id=051aced42927f177709c2db701000000, repr=IMPALA)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 331, in train
+    raise skipped from exception_cause(skipped)
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/tune/trainable/trainable.py", line 328, in train
+    result = self.step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 951, in step
+    train_results, train_iter_ctx = self._run_one_training_iteration()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/algorithm.py", line 3600, in _run_one_training_iteration
+    training_step_results = self.training_step()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 653, in training_step
+    return self._training_step_old_api_stack()
+  File "/home/yoshi/.conda/envs/ssrl/lib/python3.10/site-packages/ray/rllib/algorithms/impala/impala.py", line 1020, in _training_step_old_api_stack
+    raise RuntimeError("The learner thread died while training!")
+RuntimeError: The learner thread died while training!
