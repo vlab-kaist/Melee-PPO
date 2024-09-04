@@ -44,6 +44,7 @@ class PPOGRUAgent(PPO_RNN):
         
         self.sdi = None
         self.shield_charging = False
+        self.cc_test = None
         
     def act(self, states, timestep: int, timesteps: int):
         #if env is not myenv, env gives gamestate itself to an agent
@@ -54,9 +55,19 @@ class PPOGRUAgent(PPO_RNN):
         if isinstance(self.gamestate, melee.gamestate.GameState):
             ai = self.gamestate.players[self.agent_id]
             op = self.gamestate.players[3 - self.agent_id]
+
+            actionable_landing = ai.action == Action.LANDING and ai.action_frame >= 4
+
+            if ai.action in [Action.STANDING] or actionable_landing:  
+                if self.cc_test == "occ":
+                    self.crouch_cancel(mode = 1) # crouch when doing nothing
+                elif self.cc_test == "dcc": 
+                    self.crouch_cancel(mode = 2) # additional condition inhibiting crouching at high percent
+                else:
+                    pass # no crouch cancel
             
             # Priority : 1. Recovery & SDI (never possible simultaenously due to conditions) 2. Grab Mash 3. L_cancel 4. no_shield
-            if ai.shield_strength >= 40:
+            if ai.shield_strength >= 50: # increased time charging shield up
                 self.shield_charging = False
             # initial sdi setup
             if ai.hitlag_left <= 1:
@@ -66,6 +77,11 @@ class PPOGRUAgent(PPO_RNN):
             if ai.shield_strength < 10 and not self.training:
                 self.no_shield()
                 self.shield_charging = True
+
+            #3 if shield releasing motion has started, do oos move to delete it
+            if ai.action in [Action.SHIELD_RELEASE]:
+                self.no_shield()
+
             
             #2 L_cancel check
             if ai.speed_y_self < 0 and not self.training:
@@ -191,31 +207,69 @@ class PPOGRUAgent(PPO_RNN):
             Action.SWORD_DANCE_3_MID_AIR, Action.SWORD_DANCE_3_LOW_AIR, Action.SWORD_DANCE_4_HIGH_AIR, 
             Action.SWORD_DANCE_4_MID_AIR, Action.SWORD_DANCE_4_LOW_AIR, Action.SPECIAL_FALL_FORWARD, Action.SPECIAL_FALL_BACK, 
             Action.DOWNSMASH, Action.NAIR, Action.FAIR, Action.BAIR, Action.UAIR, Action.DAIR
-        ] or ai.hitlag_left >= 1
+        ] or ai.hitlag_left > 1
 
-        if (ai.position.y > -1e-4 and ai.position.y < 3) and (abs(ai.position.x) < edge_pos - 10 and is_valid_action):
+        if (ai.position.y > -1e-4 and ai.position.y < 3) and (abs(ai.position.x) < edge_pos - 15 and is_valid_action):
             self.macro_mode = True
             self.macro_idx = 0
-            self.macro_queue = [19]
-            self.l_cancel = True
-        elif ((-1e-4 <ai.position.y - left_height < 3) or (-1e-4 <ai.position.y - top_height < 4) if top_height else top_height)and ((left_left <ai.position.x < left_right) or (right_left <ai.position.x < right_right) or (top_left <ai.position.x < top_right) ) and is_valid_action:
+            self.macro_queue = [15]
+        elif ((-1e-4 <ai.position.y - left_height < 3) or (-1e-4 <ai.position.y - top_height < 4) if top_height else top_height)and ((left_left <ai.position.x < left_right) or (right_left <ai.position.x < right_right)):
             self.macro_mode = True
             self.macro_idx = 0
-            self.macro_queue = [19]
-            self.l_cancel = True
-
-        self.l_cancel = False
+            self.macro_queue = [15]
     
     def no_shield(self):
         ai = self.gamestate.players[self.agent_id]
         if ai.action in [Action.SHIELD, Action.SHIELD_REFLECT, Action.SHIELD_RELEASE]:
             self.macro_mode = True
-            self.macro_queue = [22] #May change to random selectabel oos options
+            if ai.character == Character.YOSHI:
+                self.macro_queue = [0]
+                
+            else:
+                import random
+                oos_moves = [[22], [19], [12],[True]+[False]*6+[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]]
+                self.macro_queue = random.choice(oos_moves) #May change to random selectable oos options
             self.macro_idx = 0
         else:
             self.macro_mode = False
             self.macro_idx = 0
             self.macro_queue = []
+
+    def crouch_cancel(self, mode):
+        ai = self.gamestate.players[self.agent_id]
+        num = mode
+        if num == 3:
+            return
+        
+        if ai.percent > 80 and num == 2:
+            
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+            
+            return
+
+        if not ai.on_ground:
+            
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+            
+            return
+            
+        if ai.action in [Action.CROUCHING, Action.CROUCH_START, Action.CROUCH_END]:
+            self.macro_mode = False
+            self.macro_idx = 0
+            self.macro_queue = []
+            
+            return
+
+        self.macro_mode = True
+        self.macro_idx = 0
+        self.macro_queue = [3, 3]
+
+        
+        return
     
     def emergency_shield(self):
         ai = self.gamestate.players[self.agent_id]
