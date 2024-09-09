@@ -315,10 +315,19 @@ class PPOGRUAgent(PPO_RNN):
                 distance = math.sqrt((proj_x - smashbro_x)**2 + (proj_y - smashbro_y)**2)
                 if distance < size:
                     if ai.on_ground:
-                        print("emergency shield", self.cnt)
                         self.macro_mode = True
                         self.macro_queue = [19] * 2
                         self.macro_idx = 0
+                        return True
+
+        if self.gamestate.projectiles and not self.training:
+                for projectiles in self.gamestate.projectiles:
+                    if (projectiles.type != enums.ProjectileType.ARROW and projectiles.owner != self.agent_id) and (abs(ai.position.x - projectiles.position.x) <= 25 and  -1 < (projectiles.position.y - ai.position.y) <=27):
+                        if ai.shield_strength > 20 and not self.shield_charging:
+                            self.macro_mode = True
+                            self.macro_queue = [19] * 2
+                            self.macro_idx = 0
+                            return True
         if ai.invulnerability_left > 2:
             return False
 
@@ -343,10 +352,10 @@ class PPOGRUAgent(PPO_RNN):
             return False
         if hitframe:
             if ai.on_ground:
-                print("emergency shield", self.cnt)
                 self.macro_mode = True
                 self.macro_queue = [19] * 2
                 self.macro_idx = 0
+                return True
         
     
     def mario_recovery(self):
