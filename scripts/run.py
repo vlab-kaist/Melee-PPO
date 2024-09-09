@@ -1,7 +1,7 @@
 import glob
 import subprocess
 
-script_path = ["power_test.py", "human_test.py"][0] #"human_test.py"
+script_path = ["power_test.py", "human_test.py"][1] #"human_test.py"
 iso = "/home/tgkang/ssbm.iso"
 chars = {0: "DOC", 
          1: "MARIO", 
@@ -20,7 +20,7 @@ cmd = (
     f"--char {char} "
     f"--model_path {model_path} "
     f"--stage {stage} "
-    f"--op_char {op_char} "
-    f"--op_model_path {op_model_path} "
+    #f"--op_char {op_char} "
+    #f"--op_model_path {op_model_path} "
 )
 subprocess.run(cmd, shell=True)

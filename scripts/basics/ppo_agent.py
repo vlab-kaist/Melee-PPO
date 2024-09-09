@@ -7,6 +7,7 @@ from skrl.agents.torch.ppo import PPO, PPO_RNN, PPO_DEFAULT_CONFIG
 
 import melee
 from melee import enums
+from melee.framedata import FrameData
 from melee.enums import Action, Character, Button
 import numpy as np
 from enum import Enum
@@ -28,6 +29,7 @@ class PPOGRUAgent(PPO_RNN):
         self.csv_path = csv_path
         self.is_selfplay = is_selfplay
         self.platform = platform
+        self.framedata = FrameData()
         
         self.macro_mode = False
         self.macro_queue = []
@@ -45,8 +47,10 @@ class PPOGRUAgent(PPO_RNN):
         self.sdi = None
         self.shield_charging = False
         self.cc_test = None
+        self.cnt = 0
         
     def act(self, states, timestep: int, timesteps: int):
+        self.cnt += 1
         #if env is not myenv, env gives gamestate itself to an agent
         if not isinstance(states, torch.Tensor):
             self.gamestate = states
@@ -94,11 +98,13 @@ class PPOGRUAgent(PPO_RNN):
                 self.mash_mode = False
             
             #2 Projectile shield
+            '''
             if self.gamestate.projectiles and not self.training:
                 for projectiles in self.gamestate.projectiles:
                     if (projectiles.type != enums.ProjectileType.ARROW and projectiles.owner != self.agent_id) and (abs(ai.position.x - projectiles.position.x) <= 25 and  -1 < (projectiles.position.y - ai.position.y) <=27):
                         if ai.shield_strength > 20 and not self.shield_charging:                            
                             self.emergency_shield()
+            '''
             
             # Related aspects to recovery
             if (ai.on_ground and ai.action == Action.SWORD_DANCE_2_HIGH): # cyclone is charged when down b occurs on ground
@@ -107,13 +113,16 @@ class PPOGRUAgent(PPO_RNN):
                 self.cyclone_mario = False
             if ai.on_ground or not ai.off_stage:
                 self.side_b = False
+            
+            if not self.shield_charging:
+                self.emergency_shield()
 
             if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
                 self.macro_mode = False
                 self.macro_queue = []
                 self.macro_idx = 0
             
-            elif ai.hitlag_left > 1 and not self.training:
+            elif ai.hitlag_left > 1 and not self.training and 0:
                 op = self.gamestate.players[3 - self.agent_id]
                 if self.sdi is None:
                     self.sdi = SDI()
@@ -182,6 +191,8 @@ class PPOGRUAgent(PPO_RNN):
             else:
                 self.action_cnt += 1
             self.prev = self.action
+            self.action = 0
+            
             return self.action, self._current_log_prob
             #return torch.tensor(0).unsqueeze(0) if self.agent_id == 1 else self.action, self._current_log_prob
     
@@ -227,7 +238,7 @@ class PPOGRUAgent(PPO_RNN):
                 
             else:
                 import random
-                oos_moves = [[22], [19], [12],[True]+[False]*6+[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]]
+                oos_moves = [[22], [19], [12]]
                 self.macro_queue = random.choice(oos_moves) #May change to random selectable oos options
             self.macro_idx = 0
         else:
@@ -272,11 +283,71 @@ class PPOGRUAgent(PPO_RNN):
         return
     
     def emergency_shield(self):
+        import math
         ai = self.gamestate.players[self.agent_id]
-        if ai.on_ground:
-            self.macro_mode = True
-            self.macro_queue = [19] * 2
-            self.macro_idx = 0
+        op = self.gamestate.players[3 - self.agent_id]
+        for projectile in self.gamestate.projectiles:
+
+            size = 10
+            if projectile.type == melee.enums.ProjectileType.PIKACHU_THUNDERJOLT_1:
+                size = 18
+            if projectile.type == melee.enums.ProjectileType.PIKACHU_THUNDER:
+                size = 30
+            if projectile.type == melee.enums.ProjectileType.TURNIP:
+                size = 12
+            # Your hitbox is super distorted when edge hanging. Give ourselves more leeway here
+            if  ai.action == Action.EDGE_HANGING:
+                size *= 2
+
+            # If the projectile is above us, then increase its effective size.
+            #   Since our hurtbox extends upwards more that way
+            if abs(ai.position.x - projectile.position.x) < 10 and abs(projectile.speed.x) < 1:
+                size += 5
+            proj_x, proj_y = projectile.position.x, projectile.position.y
+            for i in range(0, 1):
+                proj_x += projectile.speed.x
+                proj_y += projectile.speed.y
+                smashbro_y = ai.position.y
+                smashbro_x = ai.position.x + ai.speed_ground_x_self
+                # This is a bit hacky, but it's easiest to move our "center" up a little for the math
+                if ai.on_ground:
+                    smashbro_y += 8
+                distance = math.sqrt((proj_x - smashbro_x)**2 + (proj_y - smashbro_y)**2)
+                if distance < size:
+                    if ai.on_ground:
+                        print("emergency shield", self.cnt)
+                        self.macro_mode = True
+                        self.macro_queue = [19] * 2
+                        self.macro_idx = 0
+        if ai.invulnerability_left > 2:
+            return False
+
+        # for getup attacks
+
+        
+        attackstate = self.framedata.attack_state(op.character, op.action, op.action_frame)
+        if attackstate == melee.enums.AttackState.COOLDOWN:
+            return False
+        if attackstate == melee.enums.AttackState.NOT_ATTACKING:
+            return False
+
+        # We can't be grabbed while on the edge
+        if self.framedata.is_grab(op.character, op.action) and \
+                ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING]:
+            return False
+
+        # Will we be hit by this attack if we stand still?
+        hitframe = self.framedata.in_range(op, ai, self.gamestate.stage)
+        # Only defend on the edge if the hit is about to get us
+        if ai.action in [Action.EDGE_HANGING, Action.EDGE_CATCHING] and hitframe > 2:
+            return False
+        if hitframe:
+            if ai.on_ground:
+                print("emergency shield", self.cnt)
+                self.macro_mode = True
+                self.macro_queue = [19] * 2
+                self.macro_idx = 0
+        
     
     def mario_recovery(self):
         # maybe optimal?
