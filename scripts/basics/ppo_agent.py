@@ -287,7 +287,7 @@ class PPOGRUAgent(PPO_RNN):
         ai = self.gamestate.players[self.agent_id]
         op = self.gamestate.players[3 - self.agent_id]
         for projectile in self.gamestate.projectiles:
-
+            '''
             size = 10
             if projectile.type == melee.enums.ProjectileType.PIKACHU_THUNDERJOLT_1:
                 size = 18
@@ -318,7 +318,7 @@ class PPOGRUAgent(PPO_RNN):
                         self.macro_mode = True
                         self.macro_queue = [19] * 2
                         self.macro_idx = 0
-                        return True
+                        return True'''
 
         if self.gamestate.projectiles and not self.training:
                 for projectiles in self.gamestate.projectiles:
